@@ -100,6 +100,7 @@ SET(LIBHAWKEY_headers
 
 SET(LIBDNF_headers
     ${LIBDNF_headers}
+    config.hpp
     dnf-advisory.h
     dnf-advisorypkg.h
     dnf-advisoryref.h
