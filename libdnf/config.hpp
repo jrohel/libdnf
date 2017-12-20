@@ -226,40 +226,6 @@ private:
     T value;
 };
 
-template <typename T>
-class OptionNumberChild : public Option {
-public:
-    typedef T ValueType;
-
-    OptionNumberChild(const OptionNumber<T> & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
-
-    void set(Priority priority, T value)
-    {
-        if (priority >= this->priority) {
-            parent.test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        set(priority, parent.fromString(value));
-    }
-
-    T getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? parent.toString(value) : parent.getValueString();
-    }
-
-private:
-    const OptionNumber<T> & parent;
-    T value;
-};
-
 class OptionBool : public Option {
 /*   """An option representing a boolean value.  The value can be one
     of 0, 1, yes, no, true, or false.
@@ -322,38 +288,6 @@ protected:
 constexpr const char * OptionBool::defTrueNames[];
 constexpr const char * OptionBool::defFalseNames[];
 
-class OptionBoolChild : public Option {
-public:
-    typedef bool ValueType;
-
-    OptionBoolChild(const OptionBool & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
-
-    void set(Priority priority, bool value)
-    {
-        if (priority >= this->priority) {
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        set(priority, parent.fromString(value));
-    }
-
-    bool getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? parent.toString(value) : parent.getValueString();
-    }
-
-private:
-    const OptionBool & parent;
-    bool value;
-};
-
 class OptionString : public Option {
 public:
     typedef std::string ValueType;
@@ -389,34 +323,6 @@ public:
 private:
     std::unique_ptr<Regex> regex;
     std::string defaultValue;
-    std::string value;
-};
-
-class OptionStringChild : public Option {
-public:
-    typedef std::string ValueType;
-
-    OptionStringChild(const OptionString & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority) {
-            parent.test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    const std::string & getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? value : parent.getValueString();
-    }
-
-private:
-    const OptionString & parent;
     std::string value;
 };
 
@@ -511,69 +417,6 @@ public:
 private:
     std::vector<std::string> enumVals;
     std::string defaultValue;
-    std::string value;
-};
-
-template <typename T>
-class OptionEnumChild : public Option {
-public:
-    typedef T ValueType;
-
-    OptionEnumChild(const OptionEnum<T> & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
-
-    void set(Priority priority, T value)
-    {
-        if (priority >= this->priority) {
-            parent.test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        set(priority, parent.fromString(value));
-    }
-
-    T getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? parent.toString(value) : parent.getValueString();
-    }
-
-private:
-    const OptionEnum<T> & parent;
-    T value;
-};
-
-template <>
-class OptionEnumChild<std::string> : public Option {
-public:
-    typedef std::string ValueType;
-
-    OptionEnumChild(const OptionEnum<std::string> & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority) {
-            parent.test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    std::string getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? value : parent.getValue();
-    }
-
-private:
-    const OptionEnum<std::string> & parent;
     std::string value;
 };
 
@@ -699,40 +542,6 @@ private:
     std::vector<std::string> value;
 };
 
-class OptionStringListChild : public Option {
-public:
-    typedef std::vector<std::string> ValueType;
-
-    OptionStringListChild(const OptionStringList & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
-
-    void set(Priority priority,  const std::vector<std::string> & value)
-    {
-        if (priority >= this->priority) {
-            parent.test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority)
-            set(priority, parent.fromString(value));
-    }
-
-    const std::vector<std::string> & getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? parent.toString(value) : parent.getValueString();
-    }
-
-private:
-    const OptionStringList & parent;
-    std::vector<std::string> value;
-};
-
 template <class ParentOptionType, class Enable = void>
 class OptionChild : public Option {
 public:
@@ -792,34 +601,6 @@ private:
     const ParentOptionType & parent;
     std::string value;
 };
-
-/*template <>
-class OptionChild<OptionString> : public Option {
-public:
-    OptionChild(const OptionString & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority) {
-            parent.test(value);
-            this->priority = priority;
-            this->value = value;
-        }
-    }
-
-    const std::string & getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? value : parent.getValue();
-    }
-
-private:
-    const OptionString & parent;
-    std::string value;
-};
-*/
 
 class Config {
 public:
