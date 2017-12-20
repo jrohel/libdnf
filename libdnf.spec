@@ -58,6 +58,29 @@ Requires:       libsolv-devel%{?_isa} >= %{libsolv_version}
 %description devel
 Development files for %{name}.
 
+%package -n python2-%{name}
+%{?python_provide:%python_provide python2-%{name}}
+Summary:        Python 2 bindings for the libdnf library.
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+BuildRequires:  python2-devel
+BuildRequires:  swig
+
+%description -n python2-%{name}
+Python 2 bindings for the libdnf library.
+
+
+%if %{with python3}
+%package -n python3-%{name}
+%{?python_provide:%python_provide python3-%{name}}
+Summary:        Python 3 bindings for the libdnf library.
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+BuildRequires:  python3-devel
+BuildRequires:  swig
+
+%description -n python3-%{name}
+Python 3 bindings for the libdnf library.
+%endif
+
 %package -n python2-hawkey
 Summary:        Python 2 bindings for the hawkey library
 %{?python_provide:%python_provide python2-hawkey}
@@ -172,6 +195,14 @@ popd
 %{_libdir}/pkgconfig/%{name}.pc
 %{_includedir}/%{name}/
 %{_datadir}/gir-1.0/Dnf-*.gir
+
+%files -n python2-%{name}
+%{python2_sitearch}/%{name}/
+
+%if %{with python3}
+%files -n python3-%{name}
+%{python3_sitearch}/%{name}/
+%endif
 
 %files -n python2-hawkey
 %{python2_sitearch}/hawkey/
