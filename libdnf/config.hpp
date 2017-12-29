@@ -3,6 +3,7 @@
 
 #include "utils/bgettext/bgettext-lib.h"
 #include "utils/tinyformat/tinyformat.hpp"
+#include "utils/regex/regex.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -17,94 +18,10 @@
 #include <sstream>
 #include <iostream>
 
-#include <regex.h>
-
 constexpr const char * SYSTEM_CACHEDIR = "/var/cache/dnf";
 
 constexpr const char * URL_REGEX = "(https?|ftp|file):\\/\\/[\\w.-/?=&#;]+$";
 constexpr const char * PROXY_URL_REGEX = "^((https?|ftp|socks5h?|socks4a?):\\/\\/[\\w.-/?=&#;]+)?$";
-
-class Regex {
-public:
-    class Exception : public std::runtime_error {
-    public:
-        Exception(const std::string & msg) : runtime_error(msg) {}
-        Exception(const char * msg) : runtime_error(msg) {}
-    };
- 
-    class LibException : public Exception
-    {
-    public:
-        LibException(int code, const std::string & msg) : Exception(msg), ecode{code} {}
-        LibException(int code, const char * msg) : Exception(msg), ecode{code} {}
-        int code() const noexcept { return ecode; }
-    protected:
-        int ecode;
-    };
-
-    Regex(const Regex & src) = delete;
-    Regex(Regex && src) noexcept : exp{src.exp} { src.freed = true; }
-
-    Regex & operator=(const Regex & src) = delete;
-
-    Regex & operator=(Regex && src) noexcept
-    {
-        free();
-        exp = src.exp;
-        src.freed = true;
-        freed = false;
-        return *this;
-    }
-
-    void swap(Regex & x) { std::swap(*this, x); }
-
-    Regex(const char * regex, int flags)
-    {
-        auto errCode = regcomp(&exp, regex, flags);
-        if (errCode != 0) {
-            auto size = regerror(errCode, &exp, nullptr, 0);
-            if (size) {
-                std::string msg(size, '\0');
-                regerror(errCode, &exp, &msg.front(), size);
-                throw LibException(errCode, msg);
-            }
-            throw LibException(errCode, "");
-        }
-    }
-
-    bool match(const char *str)
-    {
-        if (freed)
-            throw Exception(_("Error: Regex object unusable. Its value moved/swaped to another Regex object."));
-
-        //regexec() returns 0 on match, otherwise REG_NOMATCH
-        return regexec(&exp, str, 0, nullptr, 0) == 0;
-    }
-
-    bool match(const char *str, std::vector<regmatch_t> & matches)
-    {
-        if (freed)
-            throw Exception(_("Error: Regex object unusable. Its value moved/swaped to another Regex object."));
-
-        //regexec() returns 0 on match, otherwise REG_NOMATCH
-        if (regexec(&exp, str, matches.size(), matches.data(), 0) == 0) {
-            int i{0};
-            while (matches[i].rm_so) ++i;
-            matches.resize(i);
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    ~Regex() { free(); }
-
-private:
-    void free() noexcept { if (!freed) regfree(&exp); }
-
-    bool freed{false};
-    regex_t exp;
-};
 
 constexpr const char * CONF_FILENAME = "/etc/dnf/dnf.conf";
 
