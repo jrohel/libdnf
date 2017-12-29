@@ -21,7 +21,7 @@
 
 constexpr const char * SYSTEM_CACHEDIR = "/var/cache/dnf";
 
-constexpr const char * URL_REGEX = "((https?|ftp|file):\\/\\/[\\w.-/?=&#;]+)?$";
+constexpr const char * URL_REGEX = "(https?|ftp|file):\\/\\/[\\w.-/?=&#;]+$";
 constexpr const char * PROXY_URL_REGEX = "^((https?|ftp|socks5h?|socks4a?):\\/\\/[\\w.-/?=&#;]+)?$";
 
 class Regex {
@@ -156,6 +156,8 @@ public:
         Exception(const char * msg) : runtime_error(msg) {}
     };
 
+    Option(Priority priority = Priority::PRIO_EMPTY) : priority{priority} {}
+
     Priority getPriority() { return priority; }
 
     virtual void set(Priority priority, const std::string & value) = 0;
@@ -164,7 +166,7 @@ public:
     virtual ~Option() = default;
 
 protected:
-    Priority priority{Priority::PRIO_DEFAULT};
+    Priority priority;
 };
 
 template <typename T>
@@ -174,7 +176,10 @@ public:
     typedef T ValueType;
 
     OptionNumber(T defaultValue, T min = std::numeric_limits<T>::min(), T max = std::numeric_limits<T>::max())
-    : defaultValue{defaultValue}, min{min}, max{max}, value{defaultValue} { test(defaultValue); }
+    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, min{min}, max{max}, value{defaultValue} { test(defaultValue); }
+
+//    OptionNumber(const T * defaultValue, T min = std::numeric_limits<T>::min(), T max = std::numeric_limits<T>::max())
+//    : defaultValue{*defaultValue}, min{min}, max{max}, value{*defaultValue} { test(*defaultValue); }
 
     void test(T value) const
     {
@@ -185,6 +190,7 @@ public:
             throw Exception(tfm::format(_("given value [%d] should be greater than "
                                             "allowed value [%d]."), value, min));
     }
+
 
     T fromString(const std::string & value) const
     {
@@ -238,7 +244,7 @@ public:
 
     OptionBool(bool defaultValue, const char * const trueVals[] = defTrueNames,
                const char * const falseVals[] = defFalseNames)
-    : trueNames{trueVals}, falseNames{falseVals}, defaultValue{defaultValue}, value{defaultValue} {}
+    : Option{Priority::PRIO_DEFAULT}, trueNames{trueVals}, falseNames{falseVals}, defaultValue{defaultValue}, value{defaultValue} {}
 
     void test(bool) const {}
 
@@ -296,10 +302,29 @@ public:
 //    typedef std::function<std::string(const std::vector<std::string> &)> ToStringFunc;
 
     OptionString(const std::string & defaultValue)
-    :  defaultValue{defaultValue}, value{defaultValue} {}
+    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
+
+    OptionString(const char * defaultValue)
+    {
+        if (defaultValue) {
+            this->value = this->defaultValue = defaultValue;
+            this->priority = Priority::PRIO_DEFAULT;
+        }
+    }
 
     OptionString(const std::string & defaultValue, Regex && regex)
-    :  regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
+    : Option{Priority::PRIO_DEFAULT}, regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
+
+    OptionString(const char * defaultValue, Regex && regex)
+    : regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}
+    {
+        if (defaultValue) {
+            this->defaultValue = defaultValue;
+            test(defaultValue);
+            this->value = this->defaultValue;
+            this->priority = Priority::PRIO_DEFAULT;
+        }
+    }
 
     void test(const std::string & value) const
     {
@@ -316,9 +341,14 @@ public:
         }
     }
 
-    const std::string & getValue() const { return value; }
+    const std::string & getValue() const
+    {
+        if (priority == Priority::PRIO_EMPTY)
+            throw Exception(_("GetValue(): Value not set"));
+        return value;
+    }
 
-    std::string getValueString() const override { return value; }
+    std::string getValueString() const override { return getValue(); }
 
 private:
     std::unique_ptr<Regex> regex;
@@ -332,10 +362,10 @@ public:
     typedef T ValueType;
 
     OptionEnum(T defaultValue, const std::vector<T> & enumVals)
-    : enumVals{enumVals}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
+    : Option{Priority::PRIO_DEFAULT}, enumVals{enumVals}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
 
     OptionEnum(T defaultValue, std::vector<T> && enumVals)
-    : enumVals{std::move(enumVals)}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
+    : Option{Priority::PRIO_DEFAULT}, enumVals{std::move(enumVals)}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
 
     void test(T value) const
     {
@@ -389,10 +419,10 @@ public:
     typedef std::string ValueType;
 
     OptionEnum(const std::string & defaultValue, const std::vector<std::string> & enumVals)
-    : enumVals{enumVals}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
+    : Option{Priority::PRIO_DEFAULT}, enumVals{enumVals}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
 
     OptionEnum(const std::string & defaultValue, std::vector<std::string> && enumVals)
-    : enumVals{std::move(enumVals)}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
+    : Option{Priority::PRIO_DEFAULT}, enumVals{std::move(enumVals)}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
 
     void test(const std::string & value) const
     {
@@ -428,10 +458,10 @@ public:
 //    typedef std::function<std::string(const std::vector<std::string> &)> ToStringFunc;
 
     OptionStringList(const std::vector<std::string> & defaultValue)
-    :  defaultValue{defaultValue}, value{defaultValue} {}
+    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
 
     OptionStringList(const std::vector<std::string> & defaultValue, Regex && regex)
-    :  regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
+    : Option{Priority::PRIO_DEFAULT}, regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
 
 //    OptionStringList(const std::vector<std::string> & defaultValue, const FromStringFunc & fromString, )
 //    :  transform{transform}, defaultValue{defaultValue}, value{defaultValue} {}
@@ -546,7 +576,7 @@ template <class ParentOptionType, class Enable = void>
 class OptionChild : public Option {
 public:
     OptionChild(const ParentOptionType & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
+    : parent{parent} {}
 
     void set(Priority priority, const typename ParentOptionType::ValueType & value)
     {
@@ -579,7 +609,7 @@ template <class ParentOptionType>
 class OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type> : public Option {
 public:
     OptionChild(const ParentOptionType & parent)
-    : parent{parent} { priority = Priority::PRIO_EMPTY; }
+    : parent{parent} {}
 
     void set(Priority priority, const std::string & value) override
     {
@@ -883,10 +913,10 @@ public:
     OptionStringList baseUrl{{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
     OptionBinding baseUrlBinding{options, baseUrl, "baseurl"};
 
-    OptionString mirrorList{"", {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionString mirrorList{nullptr, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
     OptionBinding mirrorListBinding{options, mirrorList, "mirrorlist"};
 
-    OptionString metaLink{"", {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionString metaLink{nullptr, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
     OptionBinding metaLinkBinding{options, metaLink, "metalink"};
 
     OptionString type{""};
