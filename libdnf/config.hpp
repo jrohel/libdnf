@@ -55,6 +55,22 @@ public:
         GetValueStringFunc getValueStr;
     };
 
+    OptionBinding & getOptionBinding(const std::string & key)
+    {
+        auto item = optBinds.find(key);
+        if (item == optBinds.end())
+            throw (std::runtime_error(tfm::format(_("Config: OptionBinding with key \"%s\" does not exist"), key)));
+        return item->second;
+    }
+
+    const OptionBinding & getOptionBinding(const std::string & key) const
+    {
+        auto item = optBinds.find(key);
+        if (item == optBinds.end())
+            throw (std::runtime_error(tfm::format(_("Config: OptionBinding with key \"%s\" does not exist"), key)));
+        return item->second;
+    }
+
     std::map<std::string, OptionBinding &> optBinds;
 };
 
