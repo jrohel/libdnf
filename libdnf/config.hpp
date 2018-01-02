@@ -25,13 +25,13 @@ public:
         typedef std::function<void(Option::Priority, const std::string &)> NewStringFunc;
         typedef std::function<const std::string & ()> GetValueStringFunc;
 
-        OptionBinding(std::map<std::string, OptionBinding &> & options, Option & option,
+        OptionBinding(std::map<std::string, OptionBinding &> & optBinds, Option & option,
                         const std::string & name, NewStringFunc && newString, GetValueStringFunc && getValueString)
-        : option{option}, newStr{newString}, getValueStr{getValueString} { options.insert({name, *this}); }
+        : option{option}, newStr{newString}, getValueStr{getValueString} { optBinds.insert({name, *this}); }
 
-        OptionBinding(std::map<std::string, OptionBinding &> & options, Option & option,
+        OptionBinding(std::map<std::string, OptionBinding &> & optBinds, Option & option,
                         const std::string & name)
-        : option{option} { options.insert({name, *this}); }
+        : option{option} { optBinds.insert({name, *this}); }
 
         void newString(Option::Priority priority, const std::string & value)
         {
@@ -55,79 +55,79 @@ public:
         GetValueStringFunc getValueStr;
     };
 
-    std::map<std::string, OptionBinding &> options;
+    std::map<std::string, OptionBinding &> optBinds;
 };
 
 class ConfigMain : public Config {
 public:
     OptionNumber<int> debugLevel{2, 0, 10};
-    OptionBinding debugLevelBinding{options, debugLevel, "debug_level"};
+    OptionBinding debugLevelBinding{optBinds, debugLevel, "debug_level"};
 
     OptionNumber<int> errorLevel{2, 0, 10};
-    OptionBinding errorLevelBinding{options, errorLevel, "error_level"};
+    OptionBinding errorLevelBinding{optBinds, errorLevel, "error_level"};
 
     OptionString installRoot{"/"};
-    OptionBinding installRootBinding{options, installRoot, "install_root"};
+    OptionBinding installRootBinding{optBinds, installRoot, "install_root"};
 
     OptionString configFilePath{CONF_FILENAME};
-    OptionBinding configFilePathBinding{options, configFilePath, "config_file_path", nullptr, [&](){ return configFilePath.getValue(); }};
+    OptionBinding configFilePathBinding{optBinds, configFilePath, "config_file_path", nullptr, [&](){ return configFilePath.getValue(); }};
 
     OptionBool plugins{true};
-    OptionBinding pluginsBinding{options, plugins, "plugins"};
+    OptionBinding pluginsBinding{optBinds, plugins, "plugins"};
 
     OptionStringList pluginPath{{}};
-    OptionBinding pluginPathBinding{options, pluginPath, "pluginpath"};
+    OptionBinding pluginPathBinding{optBinds, pluginPath, "pluginpath"};
 
     OptionStringList pluginConfPath{{}};
-    OptionBinding pluginConfPathBinding{options, pluginConfPath, "pluginconfpath"};
+    OptionBinding pluginConfPathBinding{optBinds, pluginConfPath, "pluginconfpath"};
 
     OptionString persistDir{""};
-    OptionBinding persistDirBinding{options, persistDir, "persistdir"};
+    OptionBinding persistDirBinding{optBinds, persistDir, "persistdir"};
 
     OptionBool transformDb{true};
-    OptionBinding transformDbBinding{options, transformDb, "transformdb"};
+    OptionBinding transformDbBinding{optBinds, transformDb, "transformdb"};
 
     OptionNumber<int> recent{7, 0};
-    OptionBinding recentBinding{options, recent, "recent"};
+    OptionBinding recentBinding{optBinds, recent, "recent"};
 
     OptionBool resetNice{true};
-    OptionBinding resetNiceBinding{options, resetNice, "reset_nice"};
+    OptionBinding resetNiceBinding{optBinds, resetNice, "reset_nice"};
 
     OptionString systemCachedir{SYSTEM_CACHEDIR};
-    OptionBinding systemCachedirBindings{options, systemCachedir, "system_cachedir"};
+    OptionBinding systemCachedirBindings{optBinds, systemCachedir, "system_cachedir"};
 
     OptionBool cacheOnly{false};
-    OptionBinding cacheOnlyBinding{options, cacheOnly, "cacheonly"};
+    OptionBinding cacheOnlyBinding{optBinds, cacheOnly, "cacheonly"};
 
     OptionBool keepCache{false};
-    OptionBinding keepCacheBinding{options, keepCache, "keepcache"};
+    OptionBinding keepCacheBinding{optBinds, keepCache, "keepcache"};
 
     OptionString logDir{"/var/log"};
-    OptionBinding logDirBinding{options, logDir, "logdir"};
+    OptionBinding logDirBinding{optBinds, logDir, "logdir"};
 
     OptionStringList reposDir{{"/etc/yum.repos.d", "/etc/yum/repos.d", "/etc/distro.repos.d"}};
-    OptionBinding reposDirBinding{options, reposDir, "reposdir"};
+    OptionBinding reposDirBinding{optBinds, reposDir, "reposdir"};
 
     OptionBool debugSolver{false};
-    OptionBinding debugSolverBinding{options, debugSolver, "debug_solver"};
+    OptionBinding debugSolverBinding{optBinds, debugSolver, "debug_solver"};
 
     OptionStringList installOnlyPkgs{{}};
-    OptionBinding installOnlyPkgsBinding{options, installOnlyPkgs, "installonlypkgs"};
+    OptionBinding installOnlyPkgsBinding{optBinds, installOnlyPkgs, "installonlypkgs"};
 
     OptionStringList groupPackageTypes{{}};
-    OptionBinding groupPackageTypesBinding{options, groupPackageTypes, "group_package_types"};
+    OptionBinding groupPackageTypesBinding{optBinds, groupPackageTypes, "group_package_types"};
 
     OptionNumber<unsigned int> installOnlyLimit{3, 2};
-    OptionBinding installOnlyLimitBinding{options, installOnlyLimit, "installonly_limit"};
+    OptionBinding installOnlyLimitBinding{optBinds, installOnlyLimit, "installonly_limit"};
 
     OptionStringList tsFlags{{}};
-    OptionBinding tsFlagsBinding{options, tsFlags, "tsflags"};
+    OptionBinding tsFlagsBinding{optBinds, tsFlags, "tsflags"};
 
     OptionBool assumeYes{false};
-    OptionBinding assumeYesBinding{options, assumeYes, "assumeyes"};
+    OptionBinding assumeYesBinding{optBinds, assumeYes, "assumeyes"};
 
     OptionBool assumeNo{false};
-    OptionBinding assumeNoBinding{options, assumeNo, "assumeno"};
+    OptionBinding assumeNoBinding{optBinds, assumeNo, "assumeno"};
 /*
         self._add_option('check_config_file_age', BoolOption(True))
         self._add_option('defaultyes', BoolOption(False))
@@ -196,215 +196,215 @@ public:
 class ConfigRepoMain : public Config {
 public:
     OptionNumber<unsigned int> retries{10};
-    OptionBinding retriesBinding{options, retries, "retries"};
+    OptionBinding retriesBinding{optBinds, retries, "retries"};
 
     OptionString cachedir{SYSTEM_CACHEDIR};
-    OptionBinding cachedirBindings{options, cachedir, "cachedir"};
+    OptionBinding cachedirBindings{optBinds, cachedir, "cachedir"};
 
     OptionBool fastestMirror{false};
-    OptionBinding fastestMirrorBinding{options, fastestMirror, "fastestmirror"};
+    OptionBinding fastestMirrorBinding{optBinds, fastestMirror, "fastestmirror"};
 
     OptionStringList excludePkgs{{}};
-    OptionBinding excludePkgsBinding{options, excludePkgs, "excludepkgs"};
-    OptionBinding excludeBinding{options, excludePkgs, "exclude"}; //compatibility with yum
+    OptionBinding excludePkgsBinding{optBinds, excludePkgs, "excludepkgs"};
+    OptionBinding excludeBinding{optBinds, excludePkgs, "exclude"}; //compatibility with yum
 
     OptionStringList includePkgs{{}};
-    OptionBinding includePkgsBinding{options, includePkgs, "includepkgs"};
+    OptionBinding includePkgsBinding{optBinds, includePkgs, "includepkgs"};
 
     OptionString proxy{"", {PROXY_URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
-    OptionBinding proxyBinding{options, proxy, "proxy"};
+    OptionBinding proxyBinding{optBinds, proxy, "proxy"};
 
     OptionString proxyUsername{""};
-    OptionBinding proxyUsernameBinding{options, proxyUsername, "proxy_username"};
+    OptionBinding proxyUsernameBinding{optBinds, proxyUsername, "proxy_username"};
 
     OptionString proxyPassword{""};
-    OptionBinding proxyPasswordBinding{options, proxyPassword, "proxy_password"};
+    OptionBinding proxyPasswordBinding{optBinds, proxyPassword, "proxy_password"};
 
     OptionStringList protectedPackages{{}};
-    OptionBinding protectedPackagesBinding{options, protectedPackages, "protected_packages"};
+    OptionBinding protectedPackagesBinding{optBinds, protectedPackages, "protected_packages"};
 
     OptionString username{""};
-    OptionBinding usernameBinding{options, username, "username"};
+    OptionBinding usernameBinding{optBinds, username, "username"};
 
     OptionString password{""};
-    OptionBinding passwordBinding{options, password, "password"};
+    OptionBinding passwordBinding{optBinds, password, "password"};
 
     OptionBool gpgCheck{false};
-    OptionBinding gpgCheckBinding{options, gpgCheck, "gpgcheck"};
+    OptionBinding gpgCheckBinding{optBinds, gpgCheck, "gpgcheck"};
 
     OptionBool repoGpgCheck{false};
-    OptionBinding repoGpgCheckBinding{options, repoGpgCheck, "repo_gpgcheck"};
+    OptionBinding repoGpgCheckBinding{optBinds, repoGpgCheck, "repo_gpgcheck"};
 
     OptionBool enabled{true};
-    OptionBinding enabledBinding{options, enabled, "enabled"};
+    OptionBinding enabledBinding{optBinds, enabled, "enabled"};
 
     OptionBool enableGroups{true};
-    OptionBinding enableGroupsBinding{options, enableGroups, "enablegroups"};
+    OptionBinding enableGroupsBinding{optBinds, enableGroups, "enablegroups"};
 
     OptionNumber<std::uint32_t> bandwidth{0};
-    OptionBinding bandwidthBinding{options, bandwidth, "bandwidth"};
+    OptionBinding bandwidthBinding{optBinds, bandwidth, "bandwidth"};
 
     OptionNumber<std::uint32_t> minRate{1000};
-    OptionBinding minRateBinding{options, minRate, "minrate"};
+    OptionBinding minRateBinding{optBinds, minRate, "minrate"};
 
     OptionEnum<std::string> ipResolve{"whatever", {"ipv4", "ipv6", "whatever"}};
-    OptionBinding ipResolveBinding{options, ipResolve, "ip_resolve"};
+    OptionBinding ipResolveBinding{optBinds, ipResolve, "ip_resolve"};
 
     OptionNumber<std::uint32_t> throttle{0};
-    OptionBinding throttleBinding{options, throttle, "throttle"};
+    OptionBinding throttleBinding{optBinds, throttle, "throttle"};
 
     OptionNumber<std::uint32_t> timeout{30};
-    OptionBinding timeoutBinding{options, timeout, "timeout"};
+    OptionBinding timeoutBinding{optBinds, timeout, "timeout"};
 
     OptionNumber<std::uint32_t> maxParallelDownloads{3, 1};
-    OptionBinding maxParallelDownloadsBinding{options, maxParallelDownloads, "max_parallel_downloads"};
+    OptionBinding maxParallelDownloadsBinding{optBinds, maxParallelDownloads, "max_parallel_downloads"};
 
     OptionNumber<std::uint32_t> metadataExpire{60 * 60 * 48};
-    OptionBinding metadataExpireBinding{options, metadataExpire, "metadata_expire"};
+    OptionBinding metadataExpireBinding{optBinds, metadataExpire, "metadata_expire"};
 
     OptionString sslCaCert{""};
-    OptionBinding sslCaCertBinding{options, sslCaCert, "sslcacert"};
+    OptionBinding sslCaCertBinding{optBinds, sslCaCert, "sslcacert"};
 
     OptionBool sslVerify{true};
-    OptionBinding sslVerifyBinding{options, sslVerify, "sslverify"};
+    OptionBinding sslVerifyBinding{optBinds, sslVerify, "sslverify"};
 
     OptionString sslClientCert{""};
-    OptionBinding sslClientCertBinding{options, sslClientCert, "sslclientcert"};
+    OptionBinding sslClientCertBinding{optBinds, sslClientCert, "sslclientcert"};
 
     OptionString sslClientKey{""};
-    OptionBinding sslClientKeyBinding{options, sslClientKey, "sslclientkey"};
+    OptionBinding sslClientKeyBinding{optBinds, sslClientKey, "sslclientkey"};
 
     OptionBool deltaRpm{true};
-    OptionBinding deltaRpmBinding{options, deltaRpm, "deltarpm"};
+    OptionBinding deltaRpmBinding{optBinds, deltaRpm, "deltarpm"};
 
     OptionNumber<unsigned int> deltaRpmPercentage{75};
-    OptionBinding deltaRpmPercentageBinding{options, deltaRpmPercentage, "deltarpm_percentage"};
+    OptionBinding deltaRpmPercentageBinding{optBinds, deltaRpmPercentage, "deltarpm_percentage"};
 };
 
-class ConfigRepo : Config {
+class ConfigRepo : public Config {
     ConfigRepoMain & parent;
 
 public:
     ConfigRepo(ConfigRepoMain & parent) : parent{parent} {}
 
     OptionString name{""};
-    OptionBinding nameBinding{options, name, "name"};
+    OptionBinding nameBinding{optBinds, name, "name"};
 
     OptionChild<OptionBool> enabled{parent.enabled};
-    OptionBinding enabledBinding{options, enabled, "enabled"};
+    OptionBinding enabledBinding{optBinds, enabled, "enabled"};
 
     OptionChild<OptionString> baseCachedir{parent.cachedir};
-    OptionBinding baseCachedirBindings{options, baseCachedir, "cachedir"};
+    OptionBinding baseCachedirBindings{optBinds, baseCachedir, "cachedir"};
 
     OptionStringList baseUrl{{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
-    OptionBinding baseUrlBinding{options, baseUrl, "baseurl"};
+    OptionBinding baseUrlBinding{optBinds, baseUrl, "baseurl"};
 
     OptionString mirrorList{nullptr, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
-    OptionBinding mirrorListBinding{options, mirrorList, "mirrorlist"};
+    OptionBinding mirrorListBinding{optBinds, mirrorList, "mirrorlist"};
 
     OptionString metaLink{nullptr, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
-    OptionBinding metaLinkBinding{options, metaLink, "metalink"};
+    OptionBinding metaLinkBinding{optBinds, metaLink, "metalink"};
 
     OptionString type{""};
-    OptionBinding typeBinding{options, type, "type"};
+    OptionBinding typeBinding{optBinds, type, "type"};
 
     OptionString mediaId{""};
-    OptionBinding mediaIdBinding{options, mediaId, "mediaid"};
+    OptionBinding mediaIdBinding{optBinds, mediaId, "mediaid"};
 
     OptionStringList gpgKey{{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
-    OptionBinding gpgKeyBinding{options, gpgKey, "gpgkey"};
+    OptionBinding gpgKeyBinding{optBinds, gpgKey, "gpgkey"};
 
     OptionChild<OptionStringList> excludePkgs{parent.excludePkgs};
-    OptionBinding excludePkgsBinding{options, excludePkgs, "excludepkgs"};
-    OptionBinding excludeBinding{options, excludePkgs, "exclude"}; //compatibility with yum
+    OptionBinding excludePkgsBinding{optBinds, excludePkgs, "excludepkgs"};
+    OptionBinding excludeBinding{optBinds, excludePkgs, "exclude"}; //compatibility with yum
 
     OptionChild<OptionStringList> includePkgs{parent.includePkgs};
-    OptionBinding includePkgsBinding{options, includePkgs, "includepkgs"};
+    OptionBinding includePkgsBinding{optBinds, includePkgs, "includepkgs"};
 
     OptionChild<OptionBool> fastestMirror{parent.fastestMirror};
-    OptionBinding fastestMirrorBinding{options, fastestMirror, "fastestmirror"};
+    OptionBinding fastestMirrorBinding{optBinds, fastestMirror, "fastestmirror"};
 
     OptionChild<OptionString> proxy{parent.proxy};
-    OptionBinding proxyBinding{options, proxy, "proxy"};
+    OptionBinding proxyBinding{optBinds, proxy, "proxy"};
 
     OptionChild<OptionString> proxyUsername{parent.proxyUsername};
-    OptionBinding proxyUsernameBinding{options, proxyUsername, "proxy_username"};
+    OptionBinding proxyUsernameBinding{optBinds, proxyUsername, "proxy_username"};
 
     OptionChild<OptionString> proxyPassword{parent.proxyPassword};
-    OptionBinding proxyPasswordBinding{options, proxyPassword, "proxy_password"};
+    OptionBinding proxyPasswordBinding{optBinds, proxyPassword, "proxy_password"};
 
     OptionChild<OptionString> username{parent.username};
-    OptionBinding usernameBinding{options, username, "username"};
+    OptionBinding usernameBinding{optBinds, username, "username"};
 
     OptionChild<OptionString> password{parent.password};
-    OptionBinding passwordBinding{options, password, "password"};
+    OptionBinding passwordBinding{optBinds, password, "password"};
 
     OptionChild<OptionStringList> protectedPackages{parent.protectedPackages};
-    OptionBinding protectedPackagesBinding{options, protectedPackages, "protected_packages"};
+    OptionBinding protectedPackagesBinding{optBinds, protectedPackages, "protected_packages"};
 
     OptionChild<OptionBool> gpgCheck{parent.gpgCheck};
-    OptionBinding gpgCheckBinding{options, gpgCheck, "gpgcheck"};
+    OptionBinding gpgCheckBinding{optBinds, gpgCheck, "gpgcheck"};
 
     OptionChild<OptionBool> repoGpgCheck{parent.repoGpgCheck};
-    OptionBinding repoGpgCheckBinding{options, repoGpgCheck, "repo_gpgcheck"};
+    OptionBinding repoGpgCheckBinding{optBinds, repoGpgCheck, "repo_gpgcheck"};
 
     OptionChild<OptionBool> enableGroups{parent.enableGroups};
-    OptionBinding enableGroupsBinding{options, enableGroups, "enablegroups"};
+    OptionBinding enableGroupsBinding{optBinds, enableGroups, "enablegroups"};
 
     OptionChild<OptionNumber<unsigned int> > retries{parent.retries};
-    OptionBinding retriesBinding{options, retries, "retries"};
+    OptionBinding retriesBinding{optBinds, retries, "retries"};
 
     OptionChild<OptionNumber<std::uint32_t> > bandwidth{parent.bandwidth};
-    OptionBinding bandwidthBinding{options, bandwidth, "bandwidth"};
+    OptionBinding bandwidthBinding{optBinds, bandwidth, "bandwidth"};
 
     OptionChild<OptionNumber<std::uint32_t> > minRate{parent.minRate};
-    OptionBinding minRateBinding{options, minRate, "minrate"};
+    OptionBinding minRateBinding{optBinds, minRate, "minrate"};
 
     OptionChild<OptionEnum<std::string> > ipResolve{parent.ipResolve};
-    OptionBinding ipResolveBinding{options, ipResolve, "ip_resolve"};
+    OptionBinding ipResolveBinding{optBinds, ipResolve, "ip_resolve"};
 
     OptionChild<OptionNumber<std::uint32_t> > throttle{parent.throttle};
-    OptionBinding throttleBinding{options, throttle, "throttle"};
+    OptionBinding throttleBinding{optBinds, throttle, "throttle"};
 
     OptionChild<OptionNumber<std::uint32_t> > timeout{parent.timeout};
-    OptionBinding timeoutBinding{options, timeout, "timeout"};
+    OptionBinding timeoutBinding{optBinds, timeout, "timeout"};
 
     OptionChild<OptionNumber<std::uint32_t> >  maxParallelDownloads{parent.maxParallelDownloads};
-    OptionBinding maxParallelDownloadsBinding{options, maxParallelDownloads, "max_parallel_downloads"};
+    OptionBinding maxParallelDownloadsBinding{optBinds, maxParallelDownloads, "max_parallel_downloads"};
 
     OptionChild<OptionNumber<std::uint32_t> > metadataExpire{parent.metadataExpire};
-    OptionBinding metadataExpireBinding{options, metadataExpire, "metadata_expire"};
+    OptionBinding metadataExpireBinding{optBinds, metadataExpire, "metadata_expire"};
 
     OptionNumber<int> cost{1000};
-    OptionBinding costBinding{options, cost, "cost"};
+    OptionBinding costBinding{optBinds, cost, "cost"};
 
     OptionNumber<int> priority{99};
-    OptionBinding priorityBinding{options, priority, "priority"};
+    OptionBinding priorityBinding{optBinds, priority, "priority"};
 
     OptionChild<OptionString> sslCaCert{parent.sslCaCert};
-    OptionBinding sslCaCertBinding{options, sslCaCert, "sslcacert"};
+    OptionBinding sslCaCertBinding{optBinds, sslCaCert, "sslcacert"};
 
     OptionChild<OptionBool> sslVerify{parent.sslVerify};
-    OptionBinding sslVerifyBinding{options, sslVerify, "sslverify"};
+    OptionBinding sslVerifyBinding{optBinds, sslVerify, "sslverify"};
 
     OptionChild<OptionString> sslClientCert{parent.sslClientCert};
-    OptionBinding sslClientCertBinding{options, sslClientCert, "sslclientcert"};
+    OptionBinding sslClientCertBinding{optBinds, sslClientCert, "sslclientcert"};
 
     OptionChild<OptionString> sslClientKey{parent.sslClientKey};
-    OptionBinding sslClientKeyBinding{options, sslClientKey, "sslclientkey"};
+    OptionBinding sslClientKeyBinding{optBinds, sslClientKey, "sslclientkey"};
 
     OptionChild<OptionBool> deltaRpm{parent.deltaRpm};
-    OptionBinding deltaRpmBinding{options, deltaRpm, "deltarpm"};
+    OptionBinding deltaRpmBinding{optBinds, deltaRpm, "deltarpm"};
 
     OptionChild<OptionNumber<unsigned int> > deltaRpmPercentage{parent.deltaRpmPercentage};
-    OptionBinding deltaRpmPercentageBinding{options, deltaRpmPercentage, "deltarpm_percentage"};
+    OptionBinding deltaRpmPercentageBinding{optBinds, deltaRpmPercentage, "deltarpm_percentage"};
 
     OptionBool skipIfUnavailable{true};
-    OptionBinding skipIfUnavailableBinding{options, skipIfUnavailable, "skip_if_unavailable"};
+    OptionBinding skipIfUnavailableBinding{optBinds, skipIfUnavailable, "skip_if_unavailable"};
 
-    // options recognized by other tools, e.g. gnome-software, but unused in dnf
+    // option recognized by other tools, e.g. gnome-software, but unused in dnf
     OptionString enabledMetadata{""};
-    OptionBinding enabledMetadataBinding{options, enabledMetadata, "enabled_metadata"};
+    OptionBinding enabledMetadataBinding{optBinds, enabledMetadata, "enabled_metadata"};
 
     // yum compatibility options
     OptionEnum<std::string> failoverMethod{"priority", {"priority", "roundrobin"}};
