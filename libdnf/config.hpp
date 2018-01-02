@@ -428,4 +428,41 @@ public:
 private:
 };
 
+class Configuration {
+public:
+    void setValue(Option::Priority priority, const std::string & section, const std::string & key, const std::string & value, bool addRepo = false);
+    void setValue(Option::Priority priority, const std::string & section, const std::string & key, std::string && value, bool addRepo = false);
+
+    ConfigMain main;
+    ConfigRepoMain repoMain;
+
+    std::map<std::string, ConfigRepo> repos;
+};
+
+inline void Configuration::setValue(Option::Priority priority, const std::string& section, const std::string & key, const std::string & value, bool addRepo)
+{
+    setValue(priority, section, key, std::string(value), addRepo);
+}
+
+inline void Configuration::setValue(Option::Priority priority, const std::string& section, const std::string & key, std::string && value, bool addRepo)
+{
+    if (section == "main") {
+        auto item = main.optBinds.find(key);
+        if (item != main.optBinds.end())
+            item->second.newString(priority, std::move(value));
+        else
+            repoMain.getOptionBinding(key).newString(priority, std::move(value));
+    } else {
+        auto item = repos.find(section);
+        if (item == repos.end()) {
+            if (addRepo) {
+                auto res = repos.emplace(section, repoMain);
+                item = res.first;
+            } else
+                throw std::runtime_error(tfm::format(_("Configuration: Repository with id \"%s\" does not exist"), section));
+        }
+        item->second.getOptionBinding(key).newString(priority, std::move(value));
+    }
+}
+
 #endif
