@@ -38,8 +38,8 @@ bool fromString(T & out, const std::string & in, std::ios_base & (*manipulator)(
    return !(iss >> manipulator >> out).fail();
 }
 
-constexpr const char * defTrueNames[]{"true", nullptr};
-constexpr const char * defFalseNames[]{"false", nullptr};
+constexpr const char * defTrueNames[]{"1", "yes", "true", "enabled", nullptr};
+constexpr const char * defFalseNames[]{"0", "no", "false", "disabled", nullptr};
 
 static bool strToBool(bool & out, const std::string & in, const char * const trueNames[] = defTrueNames,
                const char * const falseNames[] = defFalseNames)
@@ -219,19 +219,18 @@ class OptionBool : public Option {
 public:
     typedef bool ValueType;
 
-    static constexpr const char * defTrueNames[]{"1", "yes", "true", "enabled", nullptr};
-    static constexpr const char * defFalseNames[]{"0", "no", "false", "disabled", nullptr};
-
-    OptionBool(bool defaultValue, const char * const trueVals[] = defTrueNames,
-               const char * const falseVals[] = defFalseNames)
+    OptionBool(bool defaultValue, const char * const trueVals[], const char * const falseVals[])
     : Option{Priority::PRIO_DEFAULT}, trueNames{trueVals}, falseNames{falseVals}, defaultValue{defaultValue}, value{defaultValue} {}
+
+    OptionBool(bool defaultValue)
+    : OptionBool{defaultValue, nullptr, nullptr} {}
 
     void test(bool) const {}
 
     bool fromString(const std::string & value) const
     {
         bool val;
-        if (strToBool(val, value, trueNames, falseNames))
+        if (strToBool(val, value, getTrueNames(), getFalseNames()))
             return val;
         throw Exception(tfm::format(_("invalid boolean value '%s'"), value));
     }
@@ -261,8 +260,8 @@ public:
     std::string getValueString() const override { return toString(value); }
 
     bool getDefaultValue() const noexcept { return defaultValue; }
-    const char * const * getTrueNames() const noexcept { return trueNames; }
-    const char * const * getFalseNames() const noexcept { return falseNames; }
+    const char * const * getTrueNames() const noexcept { return trueNames ? trueNames : defTrueNames; }
+    const char * const * getFalseNames() const noexcept { return falseNames ? falseNames : defFalseNames; }
 
 protected:
     const char * const * const trueNames;
@@ -270,9 +269,6 @@ protected:
     bool defaultValue;
     bool value;
 };
-
-constexpr const char * OptionBool::defTrueNames[];
-constexpr const char * OptionBool::defFalseNames[];
 
 class OptionString : public Option {
 public:
