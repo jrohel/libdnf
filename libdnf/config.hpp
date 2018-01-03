@@ -434,6 +434,7 @@ public:
     void setValue(Option::Priority priority, const std::string & section, const std::string & key, std::string && value, bool addRepo = false);
 
     void readIniFile(const std::string & filePath, Option::Priority priority);
+    void readRepoFiles(const std::string & dirPath, Option::Priority priority);
 
     ConfigMain main;
     ConfigRepoMain repoMain;
