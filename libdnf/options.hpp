@@ -205,7 +205,7 @@ public:
 
     std::string getValueString() const override { return toString(value); }
 
-private:
+protected:
     T defaultValue;
     T min;
     T max;
@@ -293,7 +293,7 @@ public:
     {
         if (defaultValue) {
             this->defaultValue = defaultValue;
-            test(defaultValue);
+            test(this->defaultValue);
             this->value = this->defaultValue;
             this->priority = Priority::PRIO_DEFAULT;
         }
@@ -323,7 +323,7 @@ public:
 
     std::string getValueString() const override { return getValue(); }
 
-private:
+protected:
     std::unique_ptr<Regex> regex;
     std::string defaultValue;
     std::string value;
@@ -380,7 +380,7 @@ public:
 
     std::string getValueString() const override { return toString(value); }
 
-private:
+protected:
     std::vector<T> enumVals;
     T defaultValue;
     T value;
@@ -417,7 +417,7 @@ public:
 
     std::string getValueString() const override { return value; }
 
-private:
+protected:
     std::vector<std::string> enumVals;
     std::string defaultValue;
     std::string value;
@@ -492,10 +492,76 @@ public:
 
     std::string getValueString() const override { return toString(value); }
 
-private:
+protected:
     std::unique_ptr<Regex> regex;
     std::vector<std::string> defaultValue;
     std::vector<std::string> value;
+};
+
+//Option for file path which can validate path existence.
+class OptionPath : public OptionString {
+public:
+    OptionPath(const std::string & defaultValue, bool exists = false, bool absPath = false)
+    : OptionString{defaultValue}, exists{exists}, absPath{absPath}
+    {
+        this->defaultValue = removeFileProt(this->defaultValue);
+        test(this->defaultValue);
+        this->value = this->defaultValue;
+    }
+
+    OptionPath(const char * defaultValue, bool exists = false, bool absPath = false)
+    : OptionString{defaultValue}, exists{exists}, absPath{absPath}
+    {
+        if (defaultValue) {
+            this->defaultValue = removeFileProt(this->defaultValue);
+            test(this->defaultValue);
+            this->value = this->defaultValue;
+        }
+    }
+
+    OptionPath(const std::string & defaultValue, Regex && regex, bool exists = false, bool absPath = false)
+    : OptionString{removeFileProt(defaultValue), std::move(regex)}, exists{exists}, absPath{absPath} 
+    {
+        this->defaultValue = removeFileProt(this->defaultValue);
+        test(this->defaultValue);
+        this->value = this->defaultValue;
+    }
+
+    OptionPath(const char * defaultValue, Regex && regex, bool exists = false, bool absPath = false)
+    : OptionString{defaultValue, std::move(regex)}, exists{exists}, absPath{absPath}
+    {
+        if (defaultValue) {
+            this->defaultValue = removeFileProt(this->defaultValue);
+            test(this->defaultValue);
+            this->value = this->defaultValue;
+        }
+    }
+
+    void test(const std::string & value) const;
+
+    void set(Priority priority, const std::string & value) override
+    {
+        if (priority >= this->priority) {
+            OptionString::test(value);
+            auto val = removeFileProt(value);
+            test(val);
+            this->value = val;
+            this->priority = priority;
+        }
+    }
+
+    std::string getValueString() const override { return getValue(); }
+
+protected:
+    static std::string removeFileProt(const std::string & value)
+    {
+        if (value.compare(0, 7, "file://") == 0)
+            return value.substr(7);
+        return value;
+    }
+
+    bool exists;
+    bool absPath;
 };
 
 #endif

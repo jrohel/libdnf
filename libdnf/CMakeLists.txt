@@ -1,5 +1,6 @@
 SET (LIBDNF_SRCS
     config.cpp
+    options.cpp
     dnf-advisorypkg.cpp
     dnf-advisoryref.cpp
     dnf-advisory.cpp
