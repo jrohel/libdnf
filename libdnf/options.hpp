@@ -448,7 +448,7 @@ public:
         std::vector<std::string> tmp;
         std::string::size_type start{0};
         while (start < value.length()) {
-            auto end = value.find(" ", start);
+            auto end = value.find_first_of(" ,\n", start);
             if (end == std::string::npos) {
                 tmp.push_back(value.substr(start));
                 break;
