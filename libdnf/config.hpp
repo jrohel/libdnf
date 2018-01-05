@@ -18,6 +18,12 @@ constexpr const char * PROXY_URL_REGEX = "^((https?|ftp|socks5h?|socks4a?):\\/\\
 
 constexpr const char * CONF_FILENAME = "/etc/dnf/dnf.conf";
 
+const std::vector<std::string> GROUP_PACKAGE_TYPES{"mandatory", "default", "conditional"}; // :api
+const std::vector<std::string> INSTALLONLYPKGS{"kernel", "kernel-PAE",
+                 "installonlypkg(kernel)",
+                 "installonlypkg(kernel-module)",
+                 "installonlypkg(vm)"};
+
 class Config {
 public:
     class OptionBinding {
@@ -110,10 +116,10 @@ public:
     OptionBool plugins{true};
     OptionBinding pluginsBinding{optBinds, plugins, "plugins"};
 
-    OptionStringList pluginPath{{}};
+    OptionStringList pluginPath{std::vector<std::string>{}};
     OptionBinding pluginPathBinding{optBinds, pluginPath, "pluginpath"};
 
-    OptionStringList pluginConfPath{{}};
+    OptionStringList pluginConfPath{std::vector<std::string>{}};
     OptionBinding pluginConfPathBinding{optBinds, pluginConfPath, "pluginconfpath"};
 
     OptionString persistDir{""};
@@ -128,8 +134,8 @@ public:
     OptionBool resetNice{true};
     OptionBinding resetNiceBinding{optBinds, resetNice, "reset_nice"};
 
-    OptionString systemCachedir{SYSTEM_CACHEDIR};
-    OptionBinding systemCachedirBindings{optBinds, systemCachedir, "system_cachedir"};
+    OptionString systemCacheDir{SYSTEM_CACHEDIR};
+    OptionBinding systemCacheDirBindings{optBinds, systemCacheDir, "system_cachedir"};
 
     OptionBool cacheOnly{false};
     OptionBinding cacheOnlyBinding{optBinds, cacheOnly, "cacheonly"};
@@ -146,32 +152,58 @@ public:
     OptionBool debugSolver{false};
     OptionBinding debugSolverBinding{optBinds, debugSolver, "debug_solver"};
 
-    OptionStringList installOnlyPkgs{{}};
-    OptionBinding installOnlyPkgsBinding{optBinds, installOnlyPkgs, "installonlypkgs"};
+    OptionStringList installOnlyPkgs{INSTALLONLYPKGS};
+    OptionBinding installOnlyPkgsBinding{optBinds, installOnlyPkgs, "installonlypkgs",
+        [&](Option::Priority priority, const std::string & value){
+            addToList(installOnlyPkgs, priority, value);
+        }, nullptr
+    };
 
-    OptionStringList groupPackageTypes{{}};
+    OptionStringList groupPackageTypes{GROUP_PACKAGE_TYPES};
     OptionBinding groupPackageTypesBinding{optBinds, groupPackageTypes, "group_package_types"};
 
+/*  NOTE: If you set this to 2, then because it keeps the current
+    kernel it means if you ever install an "old" kernel it'll get rid
+    of the newest one so you probably want to use 3 as a minimum
+    ... if you turn it on. */
     OptionNumber<unsigned int> installOnlyLimit{3, 2};
     OptionBinding installOnlyLimitBinding{optBinds, installOnlyLimit, "installonly_limit"};
 
-    OptionStringList tsFlags{{}};
-    OptionBinding tsFlagsBinding{optBinds, tsFlags, "tsflags"};
+    OptionStringList tsFlags{std::vector<std::string>{}};
+    OptionBinding tsFlagsBinding{optBinds, tsFlags, "tsflags",
+        [&](Option::Priority priority, const std::string & value){
+            addToList(tsFlags, priority, value);
+        }, nullptr
+    };
 
     OptionBool assumeYes{false};
     OptionBinding assumeYesBinding{optBinds, assumeYes, "assumeyes"};
 
     OptionBool assumeNo{false};
     OptionBinding assumeNoBinding{optBinds, assumeNo, "assumeno"};
-/*
-        self._add_option('check_config_file_age', BoolOption(True))
-        self._add_option('defaultyes', BoolOption(False))
-        self._add_option('diskspacecheck', BoolOption(True))
-        self._add_option('localpkg_gpgcheck', BoolOption(False))
-        self._add_option('obsoletes', BoolOption(True))
-        self._add_option('showdupesfromrepos', BoolOption(False))
-        self._add_option('exit_on_lock', BoolOption(False))
 
+    OptionBool checkConfigFileAge{true};
+    OptionBinding checkConfigFileAgeBinding{optBinds, checkConfigFileAge, "check_config_file_age"};
+
+    OptionBool defaultYes{false};
+    OptionBinding defaultYesBinding{optBinds, defaultYes, "defaultyes"};
+
+    OptionBool diskSpaceCheck{true};
+    OptionBinding diskSpaceCheckBinding{optBinds, diskSpaceCheck, "diskspacecheck"};
+
+    OptionBool localPkgGpgCheck{false};
+    OptionBinding localPkgGpgCheckBinding{optBinds, localPkgGpgCheck, "localpkg_gpgcheck"};
+
+    OptionBool obsoletes{true};
+    OptionBinding obsoletesBinding{optBinds, obsoletes, "obsoletes"};
+
+    OptionBool showDupesFromRepos{false};
+    OptionBinding showDupesFromReposBinding{optBinds, showDupesFromRepos, "showdupesfromrepos"};
+
+    OptionBool exitOnLock{false};
+    OptionBinding exitOnLockBinding{optBinds, exitOnLock, "exit_on_lock"};
+
+    /*
         self._add_option('metadata_timer_sync',
                          SecondsOption(60 * 60 * 3)) #  3 hours
         self._add_option('disable_excludes', ListOption())
@@ -228,35 +260,64 @@ public:
 */
 };
 
+template<typename T>
+static void addToList(T & option, Option::Priority priority, const typename T::ValueType & value)
+{
+    if (priority < option.getPriority())
+        return;
+    auto tmp = option.getValue(); 
+    option.set(priority, value);
+    tmp.insert(tmp.end(), option.getValue().begin(), option.getValue().end());
+    option.set(priority, tmp);
+}
+
 class ConfigRepoMain : public Config {
 public:
     OptionNumber<unsigned int> retries{10};
     OptionBinding retriesBinding{optBinds, retries, "retries"};
 
-    OptionString cachedir{SYSTEM_CACHEDIR};
-    OptionBinding cachedirBindings{optBinds, cachedir, "cachedir"};
+    OptionString cacheDir{SYSTEM_CACHEDIR};
+    OptionBinding cacheDirBindings{optBinds, cacheDir, "cachedir"};
 
     OptionBool fastestMirror{false};
     OptionBinding fastestMirrorBinding{optBinds, fastestMirror, "fastestmirror"};
 
-    OptionStringList excludePkgs{{}};
-    OptionBinding excludePkgsBinding{optBinds, excludePkgs, "excludepkgs"};
-    OptionBinding excludeBinding{optBinds, excludePkgs, "exclude"}; //compatibility with yum
+    OptionStringList excludePkgs{std::vector<std::string>{}};
+    OptionBinding excludePkgsBinding{optBinds, excludePkgs, "excludepkgs",
+        [&](Option::Priority priority, const std::string & value){
+            addToList(includePkgs, priority, value);
+        }, nullptr
+    };
+    OptionBinding excludeBinding{optBinds, excludePkgs, "exclude", //compatibility with yum
+        [&](Option::Priority priority, const std::string & value){
+            addToList(includePkgs, priority, value);
+        }, nullptr
+    };
 
-    OptionStringList includePkgs{{}};
-    OptionBinding includePkgsBinding{optBinds, includePkgs, "includepkgs"};
+    OptionStringList includePkgs{std::vector<std::string>{}};
+    OptionBinding includePkgsBinding{optBinds, includePkgs, "includepkgs", 
+        [&](Option::Priority priority, const std::string & value){
+            addToList(includePkgs, priority, value);
+        }, nullptr
+    };
 
     OptionString proxy{"", {PROXY_URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
     OptionBinding proxyBinding{optBinds, proxy, "proxy"};
 
-    OptionString proxyUsername{""};
+    OptionString proxyUsername{nullptr};
     OptionBinding proxyUsernameBinding{optBinds, proxyUsername, "proxy_username"};
 
-    OptionString proxyPassword{""};
+    OptionString proxyPassword{nullptr};
     OptionBinding proxyPasswordBinding{optBinds, proxyPassword, "proxy_password"};
 
-    OptionStringList protectedPackages{{}};
-    OptionBinding protectedPackagesBinding{optBinds, protectedPackages, "protected_packages"};
+    OptionStringList protectedPackages{resolveGlobs("dnf glob:/etc/yum/protected.d/*.conf " \
+                                          "glob:/etc/dnf/protected.d/*.conf")};
+    OptionBinding protectedPackagesBinding{optBinds, protectedPackages, "protected_packages",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= protectedPackages.getPriority())
+                protectedPackages.set(priority, resolveGlobs(value));
+        }, nullptr
+    };
 
     OptionString username{""};
     OptionBinding usernameBinding{optBinds, username, "username"};
@@ -328,10 +389,10 @@ public:
     OptionChild<OptionBool> enabled{parent.enabled};
     OptionBinding enabledBinding{optBinds, enabled, "enabled"};
 
-    OptionChild<OptionString> baseCachedir{parent.cachedir};
-    OptionBinding baseCachedirBindings{optBinds, baseCachedir, "cachedir"};
+    OptionChild<OptionString> baseCacheDir{parent.cacheDir};
+    OptionBinding baseCacheDirBindings{optBinds, baseCacheDir, "cachedir"};
 
-    OptionStringList baseUrl{{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionStringList baseUrl{std::vector<std::string>{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
     OptionBinding baseUrlBinding{optBinds, baseUrl, "baseurl"};
 
     OptionString mirrorList{nullptr, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
@@ -346,7 +407,7 @@ public:
     OptionString mediaId{""};
     OptionBinding mediaIdBinding{optBinds, mediaId, "mediaid"};
 
-    OptionStringList gpgKey{{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionStringList gpgKey{std::vector<std::string>{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
     OptionBinding gpgKeyBinding{optBinds, gpgKey, "gpgkey"};
 
     OptionChild<OptionStringList> excludePkgs{parent.excludePkgs};

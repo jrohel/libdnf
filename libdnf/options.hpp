@@ -433,6 +433,18 @@ public:
     OptionStringList(const std::vector<std::string> & defaultValue, Regex && regex)
     : Option{Priority::PRIO_DEFAULT}, regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
 
+    OptionStringList(const std::string & defaultValue)
+    : Option{Priority::PRIO_DEFAULT}, defaultValue{fromString(defaultValue)}, value{defaultValue} {
+        this->value = this->defaultValue = fromString(defaultValue);
+    }
+
+    OptionStringList(const std::string & defaultValue, Regex && regex)
+    : Option{Priority::PRIO_DEFAULT}, regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))} {
+        this->defaultValue = fromString(defaultValue);
+        test(this->defaultValue);
+        value = this->defaultValue;
+    }
+
     void test(const std::vector<std::string> & value) const
     {
         if (regex) {
