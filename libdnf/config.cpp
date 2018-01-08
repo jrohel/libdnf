@@ -28,6 +28,73 @@
 #include <string.h>
 #include <sys/types.h>
 
+int strToSeconds(const std::string & str)
+{
+    if (str.empty())
+        throw std::runtime_error(_("no value specified"));
+
+    if (str == "-1" || str == "never") // Special cache timeout, meaning never
+        return -1;
+
+    std::size_t idx;
+    auto res = std::stod(str, &idx);
+    if (res < 0)
+        throw std::runtime_error(tfm::format(_("seconds value '%s' must not be negative"), str));
+
+    if (idx < str.length()) {
+        if (idx < str.length() - 1)
+            throw std::runtime_error(tfm::format(_("could not convert '%s' to seconds"), str));
+        switch (str.back()) {
+            case 's': case 'S':
+                break;
+            case 'm': case 'M':
+                res *= 60;
+                break;
+            case 'h': case 'H':
+                res *= 60 * 60;
+                break;
+            case 'd': case 'D':
+                res *= 60 * 60 * 24;
+                break;
+            default:
+                throw std::runtime_error(tfm::format(_("unknown unit '%s'"), str.back()));
+        }
+    }
+
+    return res;
+}
+
+int strToBytes(const std::string & str)
+{
+    if (str.empty())
+        throw std::runtime_error(_("no value specified"));
+
+    std::size_t idx;
+    auto res = std::stod(str, &idx);
+    if (res < 0)
+        throw std::runtime_error(tfm::format(_("seconds value '%s' must not be negative"), str));
+
+    if (idx < str.length()) {
+        if (idx < str.length() - 1)
+            throw std::runtime_error(tfm::format(_("could not convert '%s' to bytes"), str));
+        switch (str.back()) {
+            case 'k': case 'K':
+                res *= 1024;
+                break;
+            case 'm': case 'M':
+                res *= 1024 * 1024;
+                break;
+            case 'g': case 'G':
+                res *= 1024 * 1024 * 1024;
+                break;
+            default:
+                throw std::runtime_error(tfm::format(_("unknown unit '%s'"), str.back()));
+        }
+    }
+
+    return res;
+}
+
 static void addFromFile(std::ostream & out, const std::string & filePath)
 {
     std::ifstream ifs(filePath);

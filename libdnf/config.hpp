@@ -91,6 +91,29 @@ static void addToList(T & option, Option::Priority priority, const std::string &
     option.set(priority, tmp);
 }
 
+/*  Function converts a human readable variation specifying days, hours, minutes or seconds
+    and returns an integer number of seconds.
+    Note that due to historical president -1 means "never", so this accepts
+    that and allows the word never, too.
+
+    Valid inputs: 100, 1.5m, 90s, 1.2d, 1d, 0.1, -1, never.
+    Invalid inputs: -10, -0.1, 45.6Z, 1d6h, 1day, 1y.
+
+    Return value will always be an integer
+*/
+int strToSeconds(const std::string & str);
+
+/*  Function converts a friendly bandwidth option to bytes.  The input
+    should be a string containing a (possibly floating point)
+    number followed by an optional single character unit. Valid
+    units are 'k', 'M', 'G'. Case is ignored. The convention that
+    1k = 1024 bytes is used.
+
+    Valid inputs: 100, 123M, 45.6k, 12.4G, 100K, 786.3, 0.
+    Invalid inputs: -10, -0.1, 45.6L, 123Mb.
+*/
+int strToBytes(const std::string & str);
+
 /* Replaces globs (like /etc/foo.d/\\*.foo) by content of matching files.
  * Ignores comment lines (start with '#') and blank lines in files.
  * Result:
