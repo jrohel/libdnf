@@ -74,6 +74,17 @@ public:
     std::map<std::string, OptionBinding &> optBinds;
 };
 
+template<typename T>
+static void addToList(T & option, Option::Priority priority, const std::string & value)
+{
+    if (priority < option.getPriority())
+        return;
+    auto tmp = option.getValue(); 
+    option.set(priority, value);
+    tmp.insert(tmp.end(), option.getValue().begin(), option.getValue().end());
+    option.set(priority, tmp);
+}
+
 /* Replaces globs (like /etc/foo.d/\\*.foo) by content of matching files.
  * Ignores comment lines (start with '#') and blank lines in files.
  * Result:
