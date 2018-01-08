@@ -7,6 +7,7 @@
 #include "utils/tinyformat/tinyformat.hpp"
 #include "utils/regex/regex.hpp"
 
+#include <array>
 #include <functional>
 #include <map>
 #include <string>
@@ -23,6 +24,8 @@ const std::vector<std::string> INSTALLONLYPKGS{"kernel", "kernel-PAE",
                  "installonlypkg(kernel)",
                  "installonlypkg(kernel-module)",
                  "installonlypkg(vm)"};
+
+constexpr const char * BUGTRACKER="https://bugzilla.redhat.com/enter_bug.cgi?product=Fedora&component=dnf";
 
 class Config {
 public:
@@ -226,61 +229,133 @@ public:
     OptionBool exitOnLock{false};
     OptionBinding exitOnLockBinding{optBinds, exitOnLock, "exit_on_lock"};
 
-    /*
-        self._add_option('metadata_timer_sync',
-                         SecondsOption(60 * 60 * 3)) #  3 hours
-        self._add_option('disable_excludes', ListOption())
-        self._add_option('multilib_policy',
-                         SelectionOption('best', choices=('best', 'all'))) # :api
-        self._add_option('best', BoolOption(False)) # :api
-        self._add_option('install_weak_deps', BoolOption(True))
-        self._add_option('bugtracker_url', Option(dnf.const.BUGTRACKER))
+    OptionNumber<int> metadataTimerSync{60 * 60 * 3}; // 3 hours
+    OptionBinding metadataTimerSyncBinding{optBinds, metadataTimerSync, "metadata_timer_sync",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= metadataTimerSync.getPriority())
+                metadataTimerSync.set(priority, strToSeconds(value));
+        }, nullptr
+    };
 
-        self._add_option('color',
-                         SelectionOption('auto',
-                                         choices=('auto', 'never', 'always'),
-                                         mapper={'on': 'always', 'yes' : 'always',
-                                                 '1' : 'always', 'true': 'always',
-                                                 'off': 'never', 'no':   'never',
-                                                 '0':   'never', 'false': 'never',
-                                                 'tty': 'auto', 'if-tty': 'auto'})
-                        )
-        self._add_option('color_list_installed_older', Option('bold'))
-        self._add_option('color_list_installed_newer', Option('bold,yellow'))
-        self._add_option('color_list_installed_reinstall', Option('normal'))
-        self._add_option('color_list_installed_extra', Option('bold,red'))
-        self._add_option('color_list_available_upgrade', Option('bold,blue'))
-        self._add_option('color_list_available_downgrade', Option('dim,cyan'))
-        self._add_option('color_list_available_reinstall',
-                         Option('bold,underline,green'))
-        self._add_option('color_list_available_install', Option('normal'))
-        self._add_option('color_update_installed', Option('normal'))
-        self._add_option('color_update_local', Option('bold'))
-        self._add_option('color_update_remote', Option('normal'))
-        self._add_option('color_search_match', Option('bold'))
+    OptionStringList disableExcludes{std::vector<std::string>{}};
+    OptionBinding disableExcludesBinding{optBinds, disableExcludes, "disable_excludes"};
 
-        self._add_option('history_record', BoolOption(True))
-        self._add_option('history_record_packages', ListOption(['dnf', 'rpm']))
+    OptionEnum<std::string> multilibPolicy{"best", {"best", "all"}}; // :api
+    OptionBinding multilibPolicyBinding{optBinds, multilibPolicy, "multilib_policy"};
 
-        self._add_option('rpmverbosity', Option('info'))
-        self._add_option('strict', BoolOption(True)) # :api
-        self._add_option('skip_broken', BoolOption(False))  # :yum-compatibility
-        self._add_option('autocheck_running_kernel', BoolOption(True))  # :yum-compatibility
-        self._add_option('clean_requirements_on_remove', BoolOption(True))
-        self._add_option('history_list_view',
-                         SelectionOption('commands',
-                                         choices=('single-user-commands',
-                                                  'users', 'commands'),
-                                         mapper={'cmds': 'commands',
-                                                 'default': 'commands'}))
-        self._add_option('upgrade_group_objects_upgrade',
-                         BoolOption(True))  # :api
-        self._add_option('destdir', PathOption(None))
-        self._add_option('comment', Option())
-        # runtime only options
-        self._add_option('downloadonly', BoolOption(False, runtimeonly=True))
-        self._add_option('ignorearch', BoolOption(False))
-*/
+    OptionBool best{false}; // :api
+    OptionBinding bestBinding{optBinds, best, "best"};
+
+    OptionBool installWeakDeps{true};
+    OptionBinding installWeakDepsBinding{optBinds, installWeakDeps, "install_weak_deps"};
+
+    OptionString bugtrackerUrl{BUGTRACKER};
+    OptionBinding bugtrackerUrlBinding{optBinds, bugtrackerUrl, "bugtracker_url"};
+
+    OptionEnum<std::string> color{"auto", {"auto", "never", "always"}};
+    OptionBinding colorBinding{optBinds, color, "color",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= color.getPriority()) {
+                const std::array<const char *, 4> always{{"on", "yes", "1", "true"}};
+                const std::array<const char *, 4> never{{"off", "no", "0", "false"}};
+                const std::array<const char *, 2> aut{{"tty", "if-tty"}};
+                std::string tmp;
+                if (std::find(always.begin(), always.end(), value) != always.end())
+                    tmp = "always";
+                else if (std::find(never.begin(), never.end(), value) != never.end())
+                    tmp = "never";
+                else if (std::find(aut.begin(), aut.end(), value) != aut.end())
+                    tmp = "auto";
+                else
+                    tmp = value;
+                color.set(priority, tmp);
+            }
+        }, nullptr
+    };
+
+    OptionString colorListInstalledOlder{"bold"};
+    OptionBinding colorListInstalledOlderBinding{optBinds, colorListInstalledOlder, "color_list_installed_older"};
+
+    OptionString colorListInstalledNewer{"bold,yellow"};
+    OptionBinding colorListInstalledNewerBinding{optBinds, colorListInstalledNewer, "color_list_installed_newer"};
+
+    OptionString colorListInstalledReinstall{"normal"};
+    OptionBinding colorListInstalledReinstallBinding{optBinds, colorListInstalledReinstall, "color_list_installed_reinstall"};
+
+    OptionString colorListInstalledExtra{"bold,red"};
+    OptionBinding colorListInstalledExtraBinding{optBinds, colorListInstalledExtra, "color_list_installed_extra"};
+
+    OptionString colorListAvailableUpgrade{"bold,blue"};
+    OptionBinding colorListAvailableUpgradeBinding{optBinds, colorListAvailableUpgrade, "color_list_available_upgrade"};
+
+    OptionString colorListAvailableDowngrade{"dim,cyan"};
+    OptionBinding colorListAvailableDowngradeBinding{optBinds, colorListAvailableDowngrade, "color_list_available_downgrade"};
+
+    OptionString colorListAvailableReinstall{"bold,underline,green"};
+    OptionBinding colorListAvailableReinstallBinding{optBinds, colorListAvailableReinstall, "color_list_available_reinstall"};
+
+    OptionString colorListAvailableInstall{"normal"};
+    OptionBinding colorListAvailableInstallBinding{optBinds, colorListAvailableInstall, "color_list_available_install"};
+
+    OptionString colorUpdateInstalled{"normal"};
+    OptionBinding colorUpdateInstalledBinding{optBinds, colorUpdateInstalled, "color_update_installed"};
+
+    OptionString colorUpdateLocal{"bold"};
+    OptionBinding colorUpdateLocalBinding{optBinds, colorUpdateLocal, "color_update_local"};
+
+    OptionString colorUpdateRemote{"normal"};
+    OptionBinding colorUpdateRemoteBinding{optBinds, colorUpdateRemote, "color_update_remote"};
+
+    OptionString colorSearchMatch{"bold"};
+    OptionBinding colorSearchMatchBinding{optBinds, colorSearchMatch, "color_search_match"};
+
+    OptionBool historyRecord{true};
+    OptionBinding historyRecordBinding{optBinds, historyRecord, "history_record"};
+
+    OptionStringList historyRecordPackages{std::vector<std::string>{"dnf", "rpm"}};
+    OptionBinding historyRecordPackagesBinding{optBinds, historyRecordPackages, "history_record_packages"};
+
+    OptionString rpmVerbosity{"info"};
+    OptionBinding rpmverbosityBinding{optBinds, rpmVerbosity, "rpmverbosity"};
+
+    OptionBool strict{true}; // :api
+    OptionBinding strictBinding{optBinds, strict, "strict"};
+
+    OptionBool skipBroken{false}; // :yum-compatibility
+    OptionBinding skipBrokenBinding{optBinds, skipBroken, "skip_broken"};
+
+    OptionBool autocheckRunningKernel{true}; // :yum-compatibility
+    OptionBinding autocheckRunningKernelBinding{optBinds, autocheckRunningKernel, "autocheck_running_kernel"};
+
+    OptionBool cleanRequirementsOnRemove{true};
+    OptionBinding cleanRequirementsOnRemoveBinding{optBinds, cleanRequirementsOnRemove, "clean_requirements_on_remove"};
+
+    OptionEnum<std::string> historyListView{"commands", {"single-user-commands", "users", "commands"}};
+    OptionBinding historyListViewBinding{optBinds, historyListView, "history_list_view",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= historyListView.getPriority()) {
+                if (value == "cmds" || value == "default")
+                    historyListView.set(priority, "commands");
+                else
+                    historyListView.set(priority, value);
+            }
+        }, nullptr
+    };
+
+    OptionBool upgradeGroupObjectsUpgrade{true}; // :api
+    OptionBinding upgradeGroupObjectsUpgradeBinding{optBinds, upgradeGroupObjectsUpgrade, "upgrade_group_objects_upgrade"};
+
+    OptionPath destDir{nullptr};
+    OptionBinding destDirBinding{optBinds, destDir, "destdir"};
+
+    OptionString comment{nullptr};
+    OptionBinding commentBinding{optBinds, comment, "comment"};
+
+    // runtime only options
+    OptionBool downloadOnly{false};
+
+    OptionBool ignoreArch{false};
+    OptionBinding ignoreArchBinding{optBinds, ignoreArch, "ignorearch"};
 };
 
 template<typename T>
@@ -361,25 +436,60 @@ public:
     OptionBinding enableGroupsBinding{optBinds, enableGroups, "enablegroups"};
 
     OptionNumber<std::uint32_t> bandwidth{0};
-    OptionBinding bandwidthBinding{optBinds, bandwidth, "bandwidth"};
+    OptionBinding bandwidthBinding{optBinds, bandwidth, "bandwidth",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= bandwidth.getPriority())
+                bandwidth.set(priority, strToBytes(value));
+        }, nullptr
+    };
 
     OptionNumber<std::uint32_t> minRate{1000};
-    OptionBinding minRateBinding{optBinds, minRate, "minrate"};
+    OptionBinding minRateBinding{optBinds, minRate, "minrate",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= minRate.getPriority())
+                minRate.set(priority, strToBytes(value));
+        }, nullptr
+    };
 
     OptionEnum<std::string> ipResolve{"whatever", {"ipv4", "ipv6", "whatever"}};
-    OptionBinding ipResolveBinding{optBinds, ipResolve, "ip_resolve"};
+    OptionBinding ipResolveBinding{optBinds, ipResolve, "ip_resolve",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= ipResolve.getPriority()) {
+                auto tmp = value;
+                if (value == "4") tmp = "ipv4";
+                else if (value == "6") tmp = "ipv6";
+                else std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+                ipResolve.set(priority, tmp);
+            }
+        }, nullptr
+    };
 
     OptionNumber<std::uint32_t> throttle{0};
-    OptionBinding throttleBinding{optBinds, throttle, "throttle"};
+    OptionBinding throttleBinding{optBinds, throttle, "throttle",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= throttle.getPriority())
+                throttle.set(priority, strToBytes(value));
+        }, nullptr
+    };
 
     OptionNumber<std::uint32_t> timeout{30};
-    OptionBinding timeoutBinding{optBinds, timeout, "timeout"};
+    OptionBinding timeoutBinding{optBinds, timeout, "timeout",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= timeout.getPriority())
+                timeout.set(priority, strToSeconds(value));
+        }, nullptr
+    };
 
     OptionNumber<std::uint32_t> maxParallelDownloads{3, 1};
     OptionBinding maxParallelDownloadsBinding{optBinds, maxParallelDownloads, "max_parallel_downloads"};
 
     OptionNumber<std::uint32_t> metadataExpire{60 * 60 * 48};
-    OptionBinding metadataExpireBinding{optBinds, metadataExpire, "metadata_expire"};
+    OptionBinding metadataExpireBinding{optBinds, metadataExpire, "metadata_expire",
+        [&](Option::Priority priority, const std::string & value){
+            if (priority >= metadataExpire.getPriority())
+                metadataExpire.set(priority, strToSeconds(value));
+        }, nullptr
+    };
 
     OptionString sslCaCert{""};
     OptionBinding sslCaCertBinding{optBinds, sslCaCert, "sslcacert"};
