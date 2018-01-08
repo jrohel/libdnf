@@ -96,7 +96,7 @@ template <class ParentOptionType, class Enable = void>
 class OptionChild : public Option {
 public:
     OptionChild(const ParentOptionType & parent)
-    : parent{parent} {}
+    : parent(parent) {}
 
     void set(Priority priority, const typename ParentOptionType::ValueType & value)
     {
@@ -129,7 +129,7 @@ template <class ParentOptionType>
 class OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type> : public Option {
 public:
     OptionChild(const ParentOptionType & parent)
-    : parent{parent} {}
+    : parent(parent) {}
 
     void set(Priority priority, const std::string & value) override
     {

@@ -33,11 +33,11 @@ public:
 
         OptionBinding(std::map<std::string, OptionBinding &> & optBinds, Option & option,
                         const std::string & name, NewStringFunc && newString, GetValueStringFunc && getValueString)
-        : option{option}, newStr{newString}, getValueStr{getValueString} { optBinds.insert({name, *this}); }
+        : option(option), newStr(std::move(newString)), getValueStr(std::move(getValueString)) { optBinds.insert({name, *this}); }
 
         OptionBinding(std::map<std::string, OptionBinding &> & optBinds, Option & option,
                         const std::string & name)
-        : option{option} { optBinds.insert({name, *this}); }
+        : option(option) { optBinds.insert({name, *this}); }
 
         void newString(Option::Priority priority, const std::string & value)
         {
@@ -65,7 +65,7 @@ public:
     {
         auto item = optBinds.find(key);
         if (item == optBinds.end())
-            throw (std::runtime_error(tfm::format(_("Config: OptionBinding with key \"%s\" does not exist"), key)));
+            throw std::runtime_error(tfm::format(_("Config: OptionBinding with key \"%s\" does not exist"), key));
         return item->second;
     }
 
@@ -73,7 +73,7 @@ public:
     {
         auto item = optBinds.find(key);
         if (item == optBinds.end())
-            throw (std::runtime_error(tfm::format(_("Config: OptionBinding with key \"%s\" does not exist"), key)));
+            throw std::runtime_error(tfm::format(_("Config: OptionBinding with key \"%s\" does not exist"), key));
         return item->second;
     }
 
@@ -404,7 +404,7 @@ class ConfigRepo : public Config {
     ConfigRepoMain & parent;
 
 public:
-    ConfigRepo(ConfigRepoMain & parent) : parent{parent} {}
+    ConfigRepo(ConfigRepoMain & parent) : parent(parent) {}
 
     OptionString name{""};
     OptionBinding nameBinding{optBinds, name, "name"};

@@ -48,7 +48,7 @@ public:
     };
 
     Regex(const Regex & src) = delete;
-    Regex(Regex && src) noexcept : exp{src.exp} { src.freed = true; }
+    Regex(Regex && src) noexcept : exp(src.exp) { src.freed = true; }
     Regex(const char * regex, int flags);
 
     Regex & operator=(const Regex & src) = delete;
