@@ -24,7 +24,72 @@
 #include <fstream>
 
 #include <dirent.h>
+#include <glob.h>
+#include <string.h>
 #include <sys/types.h>
+
+static void addFromFile(std::ostream & out, const std::string & filePath)
+{
+    std::ifstream ifs(filePath);
+    if (!ifs)
+        throw std::runtime_error("parseIniFile(): Can't open file");
+    ifs.exceptions(std::ifstream::badbit);
+
+    std::string line;
+    while (!ifs.eof()) {
+        std::getline(ifs, line);
+        auto start = line.find_first_not_of(" \t\r");
+        if (start == std::string::npos)
+            continue;
+        if (line[start] == '#')
+            continue;
+        auto end = line.find_last_not_of(" \t\r");
+
+        out.write(line.c_str()+start, end - start + 1);
+        out.put(' ');
+    }
+}
+
+static void addFromFiles(std::ostream & out, const std::string & globPath)
+{
+    glob_t globBuf;
+    glob(globPath.c_str(), GLOB_MARK | GLOB_NOSORT, NULL, &globBuf);
+    for (size_t i = 0; i < globBuf.gl_pathc; ++i) {
+        auto path = globBuf.gl_pathv[i];
+        if (path[strlen(path)-1] != '/')
+            addFromFile(out, path);
+    }
+    globfree(&globBuf);
+}
+
+std::string resolveGlobs(const std::string & strWithGlobs)
+{
+    std::ostringstream res;
+    std::string::size_type start{0};
+    while (start < strWithGlobs.length()) {
+        auto end = strWithGlobs.find_first_of(" ,\n", start);
+        if (strWithGlobs.compare(start, 5, "glob:") == 0) {
+            start += 5;
+            if (start >= strWithGlobs.length())
+                break;
+            if (end == std::string::npos) {
+                addFromFiles(res, strWithGlobs.substr(start));
+                break;
+            }
+            if (end - start != 0)
+                addFromFiles(res, strWithGlobs.substr(start, end - start));
+        } else {
+            if (end == std::string::npos) {
+                res << strWithGlobs.substr(start);
+                break;
+            }
+            if (end - start != 0)
+                res << strWithGlobs.substr(start, end - start) << " ";
+        }
+        start = end + 1;
+    }
+    return res.str();
+}
 
 void Configuration::readIniFile(const std::string& filePath, Option::Priority priority)
 {

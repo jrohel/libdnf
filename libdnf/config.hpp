@@ -74,6 +74,14 @@ public:
     std::map<std::string, OptionBinding &> optBinds;
 };
 
+/* Replaces globs (like /etc/foo.d/\\*.foo) by content of matching files.
+ * Ignores comment lines (start with '#') and blank lines in files.
+ * Result:
+ * Words delimited by spaces. Characters ',' and '\n' are replaced by spaces.
+ * Extra spaces are removed.
+ */
+std::string resolveGlobs(const std::string & strWithGlobs);
+
 class ConfigMain : public Config {
 public:
     OptionNumber<int> debugLevel{2, 0, 10};
