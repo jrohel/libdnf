@@ -81,7 +81,7 @@ public:
 
     Option(Priority priority = Priority::PRIO_EMPTY) : priority{priority} {}
 
-    Priority getPriority() { return priority; }
+    virtual Priority getPriority() const { return priority; }
 
     virtual void set(Priority priority, const std::string & value) = 0;
     virtual std::string getValueString() const = 0;
@@ -97,6 +97,8 @@ class OptionChild : public Option {
 public:
     OptionChild(const ParentOptionType & parent)
     : parent(parent) {}
+
+    Priority getPriority() const override { return priority != Priority::PRIO_EMPTY ? priority : parent.getPriority(); }
 
     void set(Priority priority, const typename ParentOptionType::ValueType & value)
     {
@@ -130,6 +132,8 @@ class OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typenam
 public:
     OptionChild(const ParentOptionType & parent)
     : parent(parent) {}
+
+    Priority getPriority() const override { return priority != Priority::PRIO_EMPTY ? priority : parent.getPriority(); }
 
     void set(Priority priority, const std::string & value) override
     {
