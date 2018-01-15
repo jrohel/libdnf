@@ -427,6 +427,80 @@ protected:
     std::string value;
 };
 
+template<typename T>
+class OptionList : public Option {
+public:
+    typedef std::vector<T> ValueType;
+
+    OptionList(const std::vector<T> & defaultValue)
+    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
+
+    OptionList(const std::string & defaultValue)
+    : Option{Priority::PRIO_DEFAULT}, defaultValue{fromString(defaultValue)}, value{defaultValue} {
+        this->value = this->defaultValue = fromString(defaultValue);
+    }
+
+    void test(const std::vector<T> &) const {}
+
+    std::vector<T> fromString(const std::string & value) const
+    {
+        std::vector<T> tmp;
+        std::string::size_type start{0};
+        while (start < value.length()) {
+            auto end = value.find_first_of(" ,\n", start);
+            T tmpItem;
+            if (end == std::string::npos) {
+                std::istringstream iss(value.substr(start));
+                iss >> tmpItem;
+                tmp.push_back(std::move(tmpItem));
+                break;
+            }
+            if (end-start != 0) {
+                std::istringstream iss(value.substr(start, end - start));
+                iss >> tmpItem;
+                tmp.push_back(std::move(tmpItem));
+            }
+            start = end + 1;
+        }
+        return tmp;
+    }
+
+    void set(Priority priority, const std::vector<T> & value) {
+        if (priority >= this->priority) {
+            this->value = value;
+            this->priority = priority;
+        }
+    }
+
+    void set(Priority priority, const std::string & value) override
+    {
+        if (priority >= this->priority)
+            set(priority, fromString(value));
+    }
+
+    const std::vector<T> & getValue() const { return value; }
+
+    std::string toString(const std::vector<T> & value) const
+    {
+        std::ostringstream oss;
+        oss << "[";
+        bool next{false};
+        for (auto & val : value) {
+            if (next)
+                oss << ", ";
+            oss << val;
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+    std::string getValueString() const override { return toString(value); }
+
+protected:
+    std::vector<T> defaultValue;
+    std::vector<T> value;
+};
+
 class OptionStringList : public Option {
 public:
     typedef std::vector<std::string> ValueType;
