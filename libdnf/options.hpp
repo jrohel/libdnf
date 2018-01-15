@@ -115,7 +115,8 @@ public:
             set(priority, parent.fromString(value));
     }
 
-    const typename ParentOptionType::ValueType & getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
+    const typename ParentOptionType::ValueType getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
+    const typename ParentOptionType::ValueType getDefaultValue() const { return parent.getDefaultValue(); }
 
     std::string getValueString() const override
     {
@@ -145,6 +146,7 @@ public:
     }
 
     const std::string & getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
+    const std::string & getDefaultValue() const { return parent.getDefaultValue(); }
 
     std::string getValueString() const override
     {
@@ -199,6 +201,7 @@ public:
     }
 
     T getValue() const { return value; }
+    T getDefaultValue() const { return defaultValue; }
 
     std::string toString(T value) const
     {
@@ -252,7 +255,8 @@ public:
         set(priority, fromString(value));
     }
 
-    bool getValue() const { return value; }
+    bool getValue() const noexcept { return value; }
+    bool getDefaultValue() const noexcept { return defaultValue; }
 
     std::string toString(bool value) const
     {
@@ -263,7 +267,6 @@ public:
 
     std::string getValueString() const override { return toString(value); }
 
-    bool getDefaultValue() const noexcept { return defaultValue; }
     const char * const * getTrueNames() const noexcept { return trueNames ? trueNames : defTrueNames; }
     const char * const * getFalseNames() const noexcept { return falseNames ? falseNames : defFalseNames; }
 
@@ -325,6 +328,8 @@ public:
         return value;
     }
 
+    const std::string & getDefaultValue() const noexcept { return defaultValue; }
+
     std::string getValueString() const override { return getValue(); }
 
 protected:
@@ -374,6 +379,7 @@ public:
     }
 
     T getValue() const { return value; }
+    T getDefaultValue() const { return defaultValue; }
 
     std::string toString(T value) const
     {
@@ -417,7 +423,8 @@ public:
         }
     }
 
-    std::string getValue() const { return value; }
+    const std::string & getValue() const { return value; }
+    const std::string & getDefaultValue() const { return defaultValue; }
 
     std::string getValueString() const override { return value; }
 
@@ -479,6 +486,7 @@ public:
     }
 
     const std::vector<T> & getValue() const { return value; }
+    const std::vector<T> & getDefaultValue() const { return defaultValue; }
 
     std::string toString(const std::vector<T> & value) const
     {
@@ -565,6 +573,7 @@ public:
     }
 
     const std::vector<std::string> & getValue() const { return value; }
+    const std::vector<std::string> & getDefaultValue() const { return defaultValue; }
 
     std::string toString(const std::vector<std::string> & value) const
     {
