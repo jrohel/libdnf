@@ -25,7 +25,9 @@
 #include "utils/tinyformat/tinyformat.hpp"
 #include "utils/regex/regex.hpp"
 
+#include <cctype>
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,9 +43,11 @@ bool fromString(T & out, const std::string & in, std::ios_base & (*manipulator)(
 constexpr const char * defTrueNames[]{"1", "yes", "true", "enabled", nullptr};
 constexpr const char * defFalseNames[]{"0", "no", "false", "disabled", nullptr};
 
-static bool strToBool(bool & out, const std::string & in, const char * const trueNames[] = defTrueNames,
+static bool strToBool(bool & out, std::string in, const char * const trueNames[] = defTrueNames,
                const char * const falseNames[] = defFalseNames)
 {
+    for (auto & ch : in)
+        ch = std::tolower(ch);
     for (auto it = falseNames; *it; ++it) {
         if (in == *it) {
             out = false;
@@ -439,19 +443,19 @@ class OptionList : public Option {
 public:
     typedef std::vector<T> ValueType;
 
-    OptionList(const std::vector<T> & defaultValue)
+    OptionList(const ValueType & defaultValue)
     : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
 
     OptionList(const std::string & defaultValue)
-    : Option{Priority::PRIO_DEFAULT}, defaultValue{fromString(defaultValue)}, value{defaultValue} {
+    : Option{Priority::PRIO_DEFAULT} {
         this->value = this->defaultValue = fromString(defaultValue);
     }
 
-    void test(const std::vector<T> &) const {}
+    void test(const ValueType &) const {}
 
-    std::vector<T> fromString(const std::string & value) const
+    ValueType fromString(const std::string & value) const
     {
-        std::vector<T> tmp;
+        ValueType tmp;
         std::string::size_type start{0};
         while (start < value.length()) {
             auto end = value.find_first_of(" ,\n", start);
@@ -472,7 +476,7 @@ public:
         return tmp;
     }
 
-    void set(Priority priority, const std::vector<T> & value) {
+    void set(Priority priority, const ValueType & value) {
         if (priority >= this->priority) {
             this->value = value;
             this->priority = priority;
@@ -485,10 +489,10 @@ public:
             set(priority, fromString(value));
     }
 
-    const std::vector<T> & getValue() const { return value; }
-    const std::vector<T> & getDefaultValue() const { return defaultValue; }
+    const ValueType & getValue() const { return value; }
+    const ValueType & getDefaultValue() const { return defaultValue; }
 
-    std::string toString(const std::vector<T> & value) const
+    std::string toString(const ValueType & value) const
     {
         std::ostringstream oss;
         oss << "[";
@@ -505,22 +509,22 @@ public:
     std::string getValueString() const override { return toString(value); }
 
 protected:
-    std::vector<T> defaultValue;
-    std::vector<T> value;
+    ValueType defaultValue;
+    ValueType value;
 };
 
 class OptionStringList : public Option {
 public:
     typedef std::vector<std::string> ValueType;
 
-    OptionStringList(const std::vector<std::string> & defaultValue)
+    OptionStringList(const ValueType & defaultValue)
     : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
 
-    OptionStringList(const std::vector<std::string> & defaultValue, Regex && regex)
+    OptionStringList(const ValueType & defaultValue, Regex && regex)
     : Option{Priority::PRIO_DEFAULT}, regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
 
     OptionStringList(const std::string & defaultValue)
-    : Option{Priority::PRIO_DEFAULT}, defaultValue{fromString(defaultValue)}, value{defaultValue} {
+    : Option{Priority::PRIO_DEFAULT} {
         this->value = this->defaultValue = fromString(defaultValue);
     }
 
@@ -541,7 +545,7 @@ public:
         }
     }
 
-    std::vector<std::string> fromString(const std::string & value) const
+    ValueType fromString(const std::string & value) const
     {
         std::vector<std::string> tmp;
         std::string::size_type start{0};
@@ -558,7 +562,7 @@ public:
         return tmp;
     }
 
-    void set(Priority priority, const std::vector<std::string> & value) {
+    void set(Priority priority, const ValueType & value) {
         if (priority >= this->priority) {
             test(value);
             this->value = value;
@@ -572,10 +576,10 @@ public:
             set(priority, fromString(value));
     }
 
-    const std::vector<std::string> & getValue() const { return value; }
-    const std::vector<std::string> & getDefaultValue() const { return defaultValue; }
+    const ValueType & getValue() const { return value; }
+    const ValueType & getDefaultValue() const { return defaultValue; }
 
-    std::string toString(const std::vector<std::string> & value) const
+    std::string toString(const ValueType & value) const
     {
         std::ostringstream oss;
         oss << "[";
@@ -583,6 +587,8 @@ public:
         for (auto & val : value) {
             if (next)
                 oss << ", ";
+            else
+                next = true;
             oss << val;
         }
         oss << "]";
@@ -593,8 +599,8 @@ public:
 
 protected:
     std::unique_ptr<Regex> regex;
-    std::vector<std::string> defaultValue;
-    std::vector<std::string> value;
+    ValueType defaultValue;
+    ValueType value;
 };
 
 //Option for file path which can validate path existence.
@@ -662,5 +668,82 @@ protected:
     bool exists;
     bool absPath;
 };
+
+class OptionStringMap : public Option {
+public:
+    typedef std::map<std::string, std::string> ValueType;
+
+    OptionStringMap(const ValueType & defaultValue)
+    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
+
+    OptionStringMap(const std::string & defaultValue)
+    : Option{Priority::PRIO_DEFAULT} {
+        this->value = this->defaultValue = fromString(defaultValue);
+    }
+
+    void test(const ValueType &) const {}
+
+    ValueType fromString(const std::string & value) const
+    {
+        ValueType tmp;
+        auto start = value.find_first_not_of(" \t\r");
+        while (start != std::string::npos)
+        {
+            if (value[start] == '=')
+                throw Exception(_("Missing key"));
+            auto delimpos = value.find_first_of(", \n", start);
+            if ( delimpos == std::string::npos)
+                delimpos = value.length();
+            auto eqlpos = value.find_first_of("=", start);
+            if (eqlpos > delimpos)
+                throw Exception(_("Missing '='"));
+            auto endkeypos = value.find_last_not_of(" \t", eqlpos - 1);
+            auto valuepos = value.find_first_not_of(" \t", eqlpos + 1);
+            auto endvaluepos = value.find_last_not_of(" \t", delimpos - 1);
+            auto first = value.substr(start, endkeypos - start + 1);
+            auto second = value.substr(valuepos, endvaluepos - valuepos + 1);
+            tmp[std::move(first)] = std::move(second);
+            start = value.find_first_not_of(" \t\r", delimpos);
+        }
+        return tmp;
+    }
+
+    void set(Priority priority, const ValueType & value) {
+        if (priority >= this->priority) {
+            this->value = value;
+            this->priority = priority;
+        }
+    }
+
+    void set(Priority priority, const std::string & value) override
+    {
+        if (priority >= this->priority)
+            set(priority, fromString(value));
+    }
+
+    const ValueType & getValue() const { return value; }
+    const ValueType & getDefaultValue() const { return defaultValue; }
+
+    std::string toString(const ValueType & value) const
+    {
+        std::ostringstream oss;
+        oss << "[";
+        bool next{false};
+        for (auto & val : value) {
+            if (next)
+                oss << ", ";
+            oss << val.first << "=" << val.second;
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+    std::string getValueString() const override { return toString(value); }
+
+protected:
+    ValueType defaultValue;
+    ValueType value;
+};
+
 
 #endif

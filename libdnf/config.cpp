@@ -20,7 +20,9 @@
 
 #include "config.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <fstream>
 #include <utility>
 
@@ -33,10 +35,11 @@
 #include "utils/tinyformat/tinyformat.hpp"
 #include "utils/regex/regex.hpp"
 
+constexpr const char * PERSISTDIR = "/var/lib/dnf"; // :api
 constexpr const char * SYSTEM_CACHEDIR = "/var/cache/dnf";
 
-constexpr const char * URL_REGEX = "(https?|ftp|file):\\/\\/[\\w.-/?=&#;]+$";
-constexpr const char * PROXY_URL_REGEX = "^((https?|ftp|socks5h?|socks4a?):\\/\\/[\\w.-/?=&#;]+)?$";
+constexpr const char * URL_REGEX = "(https?|ftp|file):\\/\\/[-a-zA-Z0-9_.\\/?=&#\\$;]+$";
+constexpr const char * PROXY_URL_REGEX = "^((https?|ftp|socks5h?|socks4a?):\\/\\/[-a-zA-Z0-9_.\\/?=&#\\$;]+)?$";
 
 constexpr const char * CONF_FILENAME = "/etc/dnf/dnf.conf";
 
@@ -210,13 +213,13 @@ static void addToList(T & option, Option::Priority priority, const std::string &
 
 // ============= Substitution class ================
 
-static std::ostream & operator<<(std::ostream & os, const Substitution & subst)
+std::ostream & operator<<(std::ostream & os, const Substitution & subst)
 {
     os << subst.first << " = " << subst.second;
     return os;
 }
 
-static std::istream & operator>>(std::istream & is, Substitution & subst)
+std::istream & operator>>(std::istream & is, Substitution & subst)
 {
     std::string value;
 
@@ -258,6 +261,11 @@ OptionBinding::OptionBinding(Config & config, Option & option, const std::string
     config.optBinds().add(name, *this);
 }
 
+Option::Priority OptionBinding::getPriority() const
+{
+    return option.getPriority();
+}
+
 void OptionBinding::newString(Option::Priority priority, const std::string & value)
 {
     if (newStr)
@@ -266,11 +274,11 @@ void OptionBinding::newString(Option::Priority priority, const std::string & val
         option.set(priority, value);
 }
 
-const std::string OptionBinding::getValueString()
+std::string OptionBinding::getValueString() const
 {
-    if (getValueStr)
+    if (getValueStr) {
         return getValueStr();
-    else
+    }else
         return option.getValueString();
 }
 
@@ -311,8 +319,11 @@ private:
     friend class ConfigMain;
     Config & owner;
 
-    OptionList<Substitution> substitutions{std::vector<Substitution>{}};
+    OptionStringMap substitutions{std::map<std::string, std::string>{}};
     OptionBinding substitutionsBinding{owner, substitutions, "substitutions"};
+
+    OptionList<Substitution> substitutionsO{std::vector<Substitution>{}};
+    OptionBinding substitutionsBindingO{owner, substitutionsO, "substitutionsO"};
 
     OptionString arch{nullptr};
     OptionBinding archBinding{owner, arch, "arch"};
@@ -323,11 +334,11 @@ private:
     OptionNumber<std::int32_t> errorLevel{2, 0, 10};
     OptionBinding errorLevelBinding{owner, errorLevel, "error_level"};
 
-    OptionString installRoot{"/"};
-    OptionBinding installRootBinding{owner, installRoot, "install_root"};
+    OptionPath installRoot{"/"};
+    OptionBinding installRootBinding{owner, installRoot, "installroot"};
 
-    OptionString configFilePath{CONF_FILENAME};
-    OptionBinding configFilePathBinding{owner, configFilePath, "config_file_path", nullptr, [&](){ return configFilePath.getValue(); }};
+    OptionPath configFilePath{CONF_FILENAME};
+    OptionBinding configFilePathBinding{owner, configFilePath, "config_file_path"};
 
     OptionBool plugins{true};
     OptionBinding pluginsBinding{owner, plugins, "plugins"};
@@ -338,7 +349,7 @@ private:
     OptionStringList pluginConfPath{std::vector<std::string>{}};
     OptionBinding pluginConfPathBinding{owner, pluginConfPath, "pluginconfpath"};
 
-    OptionString persistDir{""};
+    OptionPath persistDir{PERSISTDIR};
     OptionBinding persistDirBinding{owner, persistDir, "persistdir"};
 
     OptionBool transformDb{true};
@@ -350,7 +361,7 @@ private:
     OptionBool resetNice{true};
     OptionBinding resetNiceBinding{owner, resetNice, "reset_nice"};
 
-    OptionString systemCacheDir{SYSTEM_CACHEDIR};
+    OptionPath systemCacheDir{SYSTEM_CACHEDIR};
     OptionBinding systemCacheDirBindings{owner, systemCacheDir, "system_cachedir"};
 
     OptionBool cacheOnly{false};
@@ -542,89 +553,14 @@ private:
 
     OptionBool ignoreArch{false};
     OptionBinding ignoreArchBinding{owner, ignoreArch, "ignorearch"};
-};
-
-ConfigMain::ConfigMain() { pImpl = std::unique_ptr<Impl>(new Impl(*this)); }
-ConfigMain::~ConfigMain() = default;
-
-OptionList<Substitution> & ConfigMain::substitutions() { return pImpl->substitutions; }
-OptionString & ConfigMain::arch() { return pImpl->arch; }
-OptionNumber<std::int32_t> & ConfigMain::debugLevel() { return pImpl->debugLevel; }
-OptionNumber<std::int32_t> & ConfigMain::errorLevel() { return pImpl->errorLevel; }
-OptionString & ConfigMain::installRoot() { return pImpl->installRoot; }
-OptionString & ConfigMain::configFilePath() { return pImpl->configFilePath; }
-OptionBool & ConfigMain::plugins() { return pImpl->plugins; }
-OptionStringList & ConfigMain::pluginPath() { return pImpl->pluginPath; }
-OptionStringList & ConfigMain::pluginConfPath() { return pImpl->pluginConfPath; }
-OptionString & ConfigMain::persistDir() { return pImpl->persistDir; }
-OptionBool & ConfigMain::transformDb() { return pImpl->transformDb; }
-OptionNumber<std::int32_t> & ConfigMain::recent() { return pImpl->recent; }
-OptionBool & ConfigMain::resetNice() { return pImpl->resetNice; }
-OptionString & ConfigMain::systemCacheDir() { return pImpl->systemCacheDir; }
-OptionBool & ConfigMain::cacheOnly() { return pImpl->cacheOnly; }
-OptionBool & ConfigMain::keepCache() { return pImpl->keepCache; }
-OptionString & ConfigMain::logDir() { return pImpl->logDir; }
-OptionStringList & ConfigMain::reposDir() { return pImpl->reposDir; }
-OptionBool & ConfigMain::debugSolver() { return pImpl->debugSolver; }
-OptionStringList & ConfigMain::installOnlyPkgs() { return pImpl->installOnlyPkgs; }
-OptionStringList & ConfigMain::groupPackageTypes() { return pImpl->groupPackageTypes; }
-OptionNumber<std::uint32_t> & ConfigMain::installOnlyLimit() { return pImpl->installOnlyLimit; }
-OptionStringList & ConfigMain::tsFlags() { return pImpl->tsFlags; }
-OptionBool & ConfigMain::assumeYes() { return pImpl->assumeYes; }
-OptionBool & ConfigMain::assumeNo() { return pImpl->assumeNo; }
-OptionBool & ConfigMain::checkConfigFileAge() { return pImpl->checkConfigFileAge; }
-OptionBool & ConfigMain::defaultYes() { return pImpl->defaultYes; }
-OptionBool & ConfigMain::diskSpaceCheck() { return pImpl->diskSpaceCheck; }
-OptionBool & ConfigMain::localPkgGpgCheck() { return pImpl->localPkgGpgCheck; }
-OptionBool & ConfigMain::obsoletes() { return pImpl->obsoletes; }
-OptionBool & ConfigMain::showDupesFromRepos() { return pImpl->showDupesFromRepos; }
-OptionBool & ConfigMain::exitOnLock() { return pImpl->exitOnLock; }
-OptionNumber<std::int32_t> & ConfigMain::metadataTimerSync() { return pImpl->metadataTimerSync; }
-OptionStringList & ConfigMain::disableExcludes() { return pImpl->disableExcludes; }
-OptionEnum<std::string> & ConfigMain::multilibPolicy() { return pImpl->multilibPolicy; }
-OptionBool & ConfigMain::best() { return pImpl->best; }
-OptionBool & ConfigMain::installWeakDeps() { return pImpl->installWeakDeps; }
-OptionString & ConfigMain::bugtrackerUrl() { return pImpl->bugtrackerUrl; }
-OptionEnum<std::string> & ConfigMain::color() { return pImpl->color; }
-OptionString & ConfigMain::colorListInstalledOlder() { return pImpl->colorListInstalledOlder; }
-OptionString & ConfigMain::colorListInstalledNewer() { return pImpl->colorListInstalledNewer; }
-OptionString & ConfigMain::colorListInstalledReinstall() { return pImpl->colorListInstalledReinstall; }
-OptionString & ConfigMain::colorListInstalledExtra() { return pImpl->colorListInstalledExtra; }
-OptionString & ConfigMain::colorListAvailableUpgrade() { return pImpl->colorListAvailableUpgrade; }
-OptionString & ConfigMain::colorListAvailableDowngrade() { return pImpl->colorListAvailableDowngrade; }
-OptionString & ConfigMain::colorListAvailableReinstall() { return pImpl->colorListAvailableReinstall; }
-OptionString & ConfigMain::colorListAvailableInstall() { return pImpl->colorListAvailableInstall; }
-OptionString & ConfigMain::colorUpdateInstalled() { return pImpl->colorUpdateInstalled; }
-OptionString & ConfigMain::colorUpdateLocal() { return pImpl->colorUpdateLocal; }
-OptionString & ConfigMain::colorUpdateRemote() { return pImpl->colorUpdateRemote; }
-OptionString & ConfigMain::colorSearchMatch() { return pImpl->colorSearchMatch; }
-OptionBool & ConfigMain::historyRecord() { return pImpl->historyRecord; }
-OptionStringList & ConfigMain::historyRecordPackages() { return pImpl->historyRecordPackages; }
-OptionString & ConfigMain::rpmVerbosity() { return pImpl->rpmVerbosity; }
-OptionBool & ConfigMain::strict() { return pImpl->strict; }
-OptionBool & ConfigMain::skipBroken() { return pImpl->skipBroken; }
-OptionBool & ConfigMain::autocheckRunningKernel() { return pImpl->autocheckRunningKernel; }
-OptionBool & ConfigMain::cleanRequirementsOnRemove() { return pImpl->cleanRequirementsOnRemove; }
-OptionEnum<std::string> & ConfigMain::historyListView() { return pImpl->historyListView; }
-OptionBool & ConfigMain::upgradeGroupObjectsUpgrade() { return pImpl->upgradeGroupObjectsUpgrade; }
-OptionPath & ConfigMain::destDir() { return pImpl->destDir; }
-OptionString & ConfigMain::comment() { return pImpl->comment; }
-OptionBool & ConfigMain::downloadOnly() { return pImpl->downloadOnly; }
-OptionBool & ConfigMain::ignoreArch() { return pImpl->ignoreArch; }
 
 
-// =========== ConfigRepoMain class ===============
-
-class ConfigRepoMain::Impl {
-    Impl(Config & owner) : owner(owner) {}
-private:
-    friend class ConfigRepoMain;
-    Config & owner;
+    // Repo main config
 
     OptionNumber<std::uint32_t> retries{10};
     OptionBinding retriesBinding{owner, retries, "retries"};
 
-    OptionString cacheDir{SYSTEM_CACHEDIR};
+    OptionString cacheDir{nullptr};
     OptionBinding cacheDirBindings{owner, cacheDir, "cachedir"};
 
     OptionBool fastestMirror{false};
@@ -760,47 +696,113 @@ private:
     OptionBinding deltaRpmPercentageBinding{owner, deltaRpmPercentage, "deltarpm_percentage"};
 };
 
-ConfigRepoMain::ConfigRepoMain() : pImpl(new Impl(*this)) {}
-ConfigRepoMain::~ConfigRepoMain() = default;
+ConfigMain::ConfigMain() { pImpl = std::unique_ptr<Impl>(new Impl(*this)); }
+ConfigMain::~ConfigMain() = default;
 
-OptionNumber<std::uint32_t> & ConfigRepoMain::retries() { return pImpl->retries; }
-OptionString & ConfigRepoMain::cacheDir() { return pImpl->cacheDir; }
-OptionBool & ConfigRepoMain::fastestMirror() { return pImpl->fastestMirror; }
-OptionStringList & ConfigRepoMain::excludePkgs() { return pImpl->excludePkgs; }
-OptionStringList & ConfigRepoMain::includePkgs() { return pImpl->includePkgs; }
-OptionString & ConfigRepoMain::proxy() { return pImpl->proxy; }
-OptionString & ConfigRepoMain::proxyUsername() { return pImpl->proxyUsername; }
-OptionString & ConfigRepoMain::proxyPassword() { return pImpl->proxyPassword; }
-OptionStringList & ConfigRepoMain::protectedPackages() { return pImpl->protectedPackages; }
-OptionString & ConfigRepoMain::username() { return pImpl->username; }
-OptionString & ConfigRepoMain::password() { return pImpl->password; }
-OptionBool & ConfigRepoMain::gpgCheck() { return pImpl->gpgCheck; }
-OptionBool & ConfigRepoMain::repoGpgCheck() { return pImpl->repoGpgCheck; }
-OptionBool & ConfigRepoMain::enabled() { return pImpl->enabled; }
-OptionBool & ConfigRepoMain::enableGroups() { return pImpl->enableGroups; }
-OptionNumber<std::uint32_t> & ConfigRepoMain::bandwidth() { return pImpl->bandwidth; }
-OptionNumber<std::uint32_t> & ConfigRepoMain::minRate() { return pImpl->minRate; }
-OptionEnum<std::string> & ConfigRepoMain::ipResolve() { return pImpl->ipResolve; }
-OptionNumber<std::uint32_t> & ConfigRepoMain::throttle() { return pImpl->throttle; }
-OptionNumber<std::uint32_t> & ConfigRepoMain::timeout() { return pImpl->timeout; }
-OptionNumber<std::uint32_t> & ConfigRepoMain::maxParallelDownloads() { return pImpl->maxParallelDownloads; }
-OptionNumber<std::uint32_t> & ConfigRepoMain::metadataExpire() { return pImpl->metadataExpire; }
-OptionString & ConfigRepoMain::sslCaCert() { return pImpl->sslCaCert; }
-OptionBool & ConfigRepoMain::sslVerify() { return pImpl->sslVerify; }
-OptionString & ConfigRepoMain::sslClientCert() { return pImpl->sslClientCert; }
-OptionString & ConfigRepoMain::sslClientKey() { return pImpl->sslClientKey; }
-OptionBool & ConfigRepoMain::deltaRpm() { return pImpl->deltaRpm; }
-OptionNumber<std::uint32_t> & ConfigRepoMain::deltaRpmPercentage() { return pImpl->deltaRpmPercentage; }
+OptionStringMap & ConfigMain::substitutions() { return pImpl->substitutions; }
+OptionString & ConfigMain::arch() { return pImpl->arch; }
+OptionNumber<std::int32_t> & ConfigMain::debugLevel() { return pImpl->debugLevel; }
+OptionNumber<std::int32_t> & ConfigMain::errorLevel() { return pImpl->errorLevel; }
+OptionString & ConfigMain::installRoot() { return pImpl->installRoot; }
+OptionString & ConfigMain::configFilePath() { return pImpl->configFilePath; }
+OptionBool & ConfigMain::plugins() { return pImpl->plugins; }
+OptionStringList & ConfigMain::pluginPath() { return pImpl->pluginPath; }
+OptionStringList & ConfigMain::pluginConfPath() { return pImpl->pluginConfPath; }
+OptionString & ConfigMain::persistDir() { return pImpl->persistDir; }
+OptionBool & ConfigMain::transformDb() { return pImpl->transformDb; }
+OptionNumber<std::int32_t> & ConfigMain::recent() { return pImpl->recent; }
+OptionBool & ConfigMain::resetNice() { return pImpl->resetNice; }
+OptionString & ConfigMain::systemCacheDir() { return pImpl->systemCacheDir; }
+OptionBool & ConfigMain::cacheOnly() { return pImpl->cacheOnly; }
+OptionBool & ConfigMain::keepCache() { return pImpl->keepCache; }
+OptionString & ConfigMain::logDir() { return pImpl->logDir; }
+OptionStringList & ConfigMain::reposDir() { return pImpl->reposDir; }
+OptionBool & ConfigMain::debugSolver() { return pImpl->debugSolver; }
+OptionStringList & ConfigMain::installOnlyPkgs() { return pImpl->installOnlyPkgs; }
+OptionStringList & ConfigMain::groupPackageTypes() { return pImpl->groupPackageTypes; }
+OptionNumber<std::uint32_t> & ConfigMain::installOnlyLimit() { return pImpl->installOnlyLimit; }
+OptionStringList & ConfigMain::tsFlags() { return pImpl->tsFlags; }
+OptionBool & ConfigMain::assumeYes() { return pImpl->assumeYes; }
+OptionBool & ConfigMain::assumeNo() { return pImpl->assumeNo; }
+OptionBool & ConfigMain::checkConfigFileAge() { return pImpl->checkConfigFileAge; }
+OptionBool & ConfigMain::defaultYes() { return pImpl->defaultYes; }
+OptionBool & ConfigMain::diskSpaceCheck() { return pImpl->diskSpaceCheck; }
+OptionBool & ConfigMain::localPkgGpgCheck() { return pImpl->localPkgGpgCheck; }
+OptionBool & ConfigMain::obsoletes() { return pImpl->obsoletes; }
+OptionBool & ConfigMain::showDupesFromRepos() { return pImpl->showDupesFromRepos; }
+OptionBool & ConfigMain::exitOnLock() { return pImpl->exitOnLock; }
+OptionNumber<std::int32_t> & ConfigMain::metadataTimerSync() { return pImpl->metadataTimerSync; }
+OptionStringList & ConfigMain::disableExcludes() { return pImpl->disableExcludes; }
+OptionEnum<std::string> & ConfigMain::multilibPolicy() { return pImpl->multilibPolicy; }
+OptionBool & ConfigMain::best() { return pImpl->best; }
+OptionBool & ConfigMain::installWeakDeps() { return pImpl->installWeakDeps; }
+OptionString & ConfigMain::bugtrackerUrl() { return pImpl->bugtrackerUrl; }
+OptionEnum<std::string> & ConfigMain::color() { return pImpl->color; }
+OptionString & ConfigMain::colorListInstalledOlder() { return pImpl->colorListInstalledOlder; }
+OptionString & ConfigMain::colorListInstalledNewer() { return pImpl->colorListInstalledNewer; }
+OptionString & ConfigMain::colorListInstalledReinstall() { return pImpl->colorListInstalledReinstall; }
+OptionString & ConfigMain::colorListInstalledExtra() { return pImpl->colorListInstalledExtra; }
+OptionString & ConfigMain::colorListAvailableUpgrade() { return pImpl->colorListAvailableUpgrade; }
+OptionString & ConfigMain::colorListAvailableDowngrade() { return pImpl->colorListAvailableDowngrade; }
+OptionString & ConfigMain::colorListAvailableReinstall() { return pImpl->colorListAvailableReinstall; }
+OptionString & ConfigMain::colorListAvailableInstall() { return pImpl->colorListAvailableInstall; }
+OptionString & ConfigMain::colorUpdateInstalled() { return pImpl->colorUpdateInstalled; }
+OptionString & ConfigMain::colorUpdateLocal() { return pImpl->colorUpdateLocal; }
+OptionString & ConfigMain::colorUpdateRemote() { return pImpl->colorUpdateRemote; }
+OptionString & ConfigMain::colorSearchMatch() { return pImpl->colorSearchMatch; }
+OptionBool & ConfigMain::historyRecord() { return pImpl->historyRecord; }
+OptionStringList & ConfigMain::historyRecordPackages() { return pImpl->historyRecordPackages; }
+OptionString & ConfigMain::rpmVerbosity() { return pImpl->rpmVerbosity; }
+OptionBool & ConfigMain::strict() { return pImpl->strict; }
+OptionBool & ConfigMain::skipBroken() { return pImpl->skipBroken; }
+OptionBool & ConfigMain::autocheckRunningKernel() { return pImpl->autocheckRunningKernel; }
+OptionBool & ConfigMain::cleanRequirementsOnRemove() { return pImpl->cleanRequirementsOnRemove; }
+OptionEnum<std::string> & ConfigMain::historyListView() { return pImpl->historyListView; }
+OptionBool & ConfigMain::upgradeGroupObjectsUpgrade() { return pImpl->upgradeGroupObjectsUpgrade; }
+OptionPath & ConfigMain::destDir() { return pImpl->destDir; }
+OptionString & ConfigMain::comment() { return pImpl->comment; }
+OptionBool & ConfigMain::downloadOnly() { return pImpl->downloadOnly; }
+OptionBool & ConfigMain::ignoreArch() { return pImpl->ignoreArch; }
+
+// Repo main config
+OptionNumber<std::uint32_t> & ConfigMain::retries() { return pImpl->retries; }
+OptionString & ConfigMain::cacheDir() { return pImpl->cacheDir; }
+OptionBool & ConfigMain::fastestMirror() { return pImpl->fastestMirror; }
+OptionStringList & ConfigMain::excludePkgs() { return pImpl->excludePkgs; }
+OptionStringList & ConfigMain::includePkgs() { return pImpl->includePkgs; }
+OptionString & ConfigMain::proxy() { return pImpl->proxy; }
+OptionString & ConfigMain::proxyUsername() { return pImpl->proxyUsername; }
+OptionString & ConfigMain::proxyPassword() { return pImpl->proxyPassword; }
+OptionStringList & ConfigMain::protectedPackages() { return pImpl->protectedPackages; }
+OptionString & ConfigMain::username() { return pImpl->username; }
+OptionString & ConfigMain::password() { return pImpl->password; }
+OptionBool & ConfigMain::gpgCheck() { return pImpl->gpgCheck; }
+OptionBool & ConfigMain::repoGpgCheck() { return pImpl->repoGpgCheck; }
+OptionBool & ConfigMain::enabled() { return pImpl->enabled; }
+OptionBool & ConfigMain::enableGroups() { return pImpl->enableGroups; }
+OptionNumber<std::uint32_t> & ConfigMain::bandwidth() { return pImpl->bandwidth; }
+OptionNumber<std::uint32_t> & ConfigMain::minRate() { return pImpl->minRate; }
+OptionEnum<std::string> & ConfigMain::ipResolve() { return pImpl->ipResolve; }
+OptionNumber<std::uint32_t> & ConfigMain::throttle() { return pImpl->throttle; }
+OptionNumber<std::uint32_t> & ConfigMain::timeout() { return pImpl->timeout; }
+OptionNumber<std::uint32_t> & ConfigMain::maxParallelDownloads() { return pImpl->maxParallelDownloads; }
+OptionNumber<std::uint32_t> & ConfigMain::metadataExpire() { return pImpl->metadataExpire; }
+OptionString & ConfigMain::sslCaCert() { return pImpl->sslCaCert; }
+OptionBool & ConfigMain::sslVerify() { return pImpl->sslVerify; }
+OptionString & ConfigMain::sslClientCert() { return pImpl->sslClientCert; }
+OptionString & ConfigMain::sslClientKey() { return pImpl->sslClientKey; }
+OptionBool & ConfigMain::deltaRpm() { return pImpl->deltaRpm; }
+OptionNumber<std::uint32_t> & ConfigMain::deltaRpmPercentage() { return pImpl->deltaRpmPercentage; }
 
 
 // ========== ConfigRepo class ===========
 
 class ConfigRepo::Impl {
-    Impl(Config & owner, ConfigRepoMain & masterConfig) : owner(owner), masterConfig(masterConfig) {}
+    Impl(Config & owner, ConfigMain & masterConfig) : owner(owner), masterConfig(masterConfig) {}
 private:
     friend class ConfigRepo;
     Config & owner;
-    ConfigRepoMain & masterConfig;
+    ConfigMain & masterConfig;
 
     OptionString name{""};
     OptionBinding nameBinding{owner, name, "name"};
@@ -923,7 +925,7 @@ private:
     OptionEnum<std::string> failoverMethod{"priority", {"priority", "roundrobin"}};
 };
 
-ConfigRepo::ConfigRepo(ConfigRepoMain & masterConfig) : pImpl(new Impl(*this, masterConfig)) {}
+ConfigRepo::ConfigRepo(ConfigMain & masterConfig) : pImpl(new Impl(*this, masterConfig)) {}
 ConfigRepo::~ConfigRepo() = default;
 ConfigRepo::ConfigRepo(ConfigRepo && src) : pImpl(std::move(src.pImpl)) {}
 
@@ -999,7 +1001,24 @@ const ConfigRepo & ConfigRepos::at(const std::string & id) const
 
 //  ============= Configuration class ===============
 
-void Configuration::readIniFile(const std::string& filePath, Option::Priority priority)
+static void substitute(std::string & text, const std::map<std::string, std::string> & substitutions)
+{
+    auto start = text.find_first_of("$");
+    while (start != text.npos)
+    {
+        auto variable = start + 1;
+        if (variable >= text.length())
+            break;
+        auto it = std::find_if_not(text.begin()+variable, text.end(), [](char c){return std::isalnum(c) || c=='_';});
+        auto pastVariable = it != text.end() ? it - text.begin() : text.length(); 
+        auto subst = substitutions.find(text.substr(variable, pastVariable - variable));
+        if (subst != substitutions.end())
+            text.replace(start, pastVariable - start, subst->second);
+        start = text.find_first_of("$", pastVariable);
+    }
+}
+
+void Configuration::readIniFile(Option::Priority priority, const std::string & filePath, const std::map<std::string, std::string> & substitutions)
 {
     std::ifstream ifs(filePath);
     if (!ifs)
@@ -1008,39 +1027,66 @@ void Configuration::readIniFile(const std::string& filePath, Option::Priority pr
 
     std::string section;
     std::string line;
+    std::string key;
+    std::string value;
+    auto wasOptionLine = false;
     while (!ifs.eof()) {
         std::getline(ifs, line);
         auto start = line.find_first_not_of(" \t\r");
         if (start == std::string::npos)
             continue;
-        if (line[start] == '#')
+        if (line[start] == '#' || line[start] == ';')
             continue;
         auto end = line.find_last_not_of(" \t\r");
 
         if (line[start] == '[') {
             if (line[end] != ']')
                 throw std::runtime_error("parseIniFile(): Missing ']'");
+            if (wasOptionLine) {
+                substitute(value, substitutions);
+                try {
+                    setValue(priority, section, key, std::move(value), true);
+                } catch (std::exception &) {}
+                wasOptionLine = false;
+            }
             section = line.substr(start + 1,end - start - 1);
             continue;
         }
+        if (section.empty())
+            throw std::runtime_error("parseIniFile(): Missing section header");
         if (line[start] == '=')
             throw std::runtime_error("parseIniFile(): Missing key");
-        auto eqlpos = line.find_first_of("=");
-        if (eqlpos == std::string::npos)
-            throw std::runtime_error("parseIniFile(): Missing '='");
-        auto endkeypos = line.find_last_not_of(" \t", eqlpos - 1);
-        auto valuepos = line.find_first_not_of(" \t", eqlpos + 1);
-        auto key = line.substr(start, endkeypos - start + 1);
-        auto value = line.substr(valuepos, end - valuepos + 1);
 
+        if (start > 0) {
+            if (!wasOptionLine)
+                throw std::runtime_error("parseIniFile(): Illegal continuation line");
+            value += "\n" + line.substr(start, end - start + 1);
+        } else {
+            if (wasOptionLine) {
+                substitute(value, substitutions);
+                try {
+                    setValue(priority, section, key, std::move(value), true);
+                } catch (std::exception &) {}
+            }
+            auto eqlpos = line.find_first_of("=");
+            if (eqlpos == std::string::npos)
+                throw std::runtime_error("parseIniFile(): Missing '='");
+            auto endkeypos = line.find_last_not_of(" \t", eqlpos - 1);
+            auto valuepos = line.find_first_not_of(" \t", eqlpos + 1);
+            key = line.substr(start, endkeypos - start + 1);
+            value = line.substr(valuepos, end - valuepos + 1);
+            wasOptionLine = true;
+        }
+    }
+    if (wasOptionLine) {
+        substitute(value, substitutions);
         try {
             setValue(priority, section, key, std::move(value), true);
-        } catch (std::exception &) {
-        }
+        } catch (std::exception &) {}
     }
 }
 
-void Configuration::readRepoFiles(const std::string & dirPath, Option::Priority priority)
+void Configuration::readRepoFiles(Option::Priority priority, const std::string & dirPath, const std::map<std::string, std::string> & substitutions)
 {
     DIR *dp;
     struct dirent *dirp;
@@ -1052,7 +1098,7 @@ void Configuration::readRepoFiles(const std::string & dirPath, Option::Priority 
     while ((dirp = readdir(dp)) != NULL) {
         auto fname = std::string(dirp->d_name);
         if (endsWith(fname, ".repo"))
-            readIniFile(dirPath + fname, priority);
+            readIniFile(priority, dirPath + fname, substitutions);
         errno = 0;
     }
     if (errno) {

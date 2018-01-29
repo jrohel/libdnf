@@ -5,6 +5,8 @@
 
 #include <exception>
 #include <functional>
+#include <istream>
+#include <ostream>
 #include <map>
 #include <memory>
 #include <string>
@@ -42,7 +44,15 @@ std::string resolveGlobs(const std::string & strWithGlobs);
 
 class Config;
 
-class Substitution : public std::pair<std::string, std::string> {};
+class Substitution : public std::pair<std::string, std::string>
+{
+public:
+    Substitution() = default;
+    Substitution(const std::string & key, const std::string & value) : pair(key, value) {}
+};
+
+std::ostream & operator<<(std::ostream & os, const Substitution & subst);
+std::istream & operator>>(std::istream & is, Substitution & subst);
 
 class OptionBinding {
 public:
@@ -56,8 +66,9 @@ public:
 
     OptionBinding & operator=(const OptionBinding & src) = delete;
 
+    Option::Priority getPriority() const;
     void newString(Option::Priority priority, const std::string & value);
-    const std::string getValueString();
+    std::string getValueString() const;
 
 private:
     Option & option;
@@ -108,7 +119,7 @@ public:
     ConfigMain();
     ~ConfigMain();
 
-    OptionList<Substitution> & substitutions();
+    OptionStringMap & substitutions();
     OptionString & arch();
     OptionNumber<std::int32_t> & debugLevel();
     OptionNumber<std::int32_t> & errorLevel();
@@ -179,16 +190,7 @@ public:
     OptionBool & downloadOnly();
     OptionBool & ignoreArch();
 
-private:
-    class Impl;
-    std::unique_ptr<Impl> pImpl;
-};
-
-class ConfigRepoMain : public Config {
-public:
-    ConfigRepoMain();
-    ~ConfigRepoMain();
-
+    // Repo main config
     OptionNumber<std::uint32_t> & retries();
     OptionString & cacheDir();
     OptionBool & fastestMirror();
@@ -225,7 +227,7 @@ private:
 
 class ConfigRepo : public Config {
 public:
-    ConfigRepo(ConfigRepoMain & masterConfig);
+    ConfigRepo(ConfigMain & masterConfig);
     ~ConfigRepo();
     ConfigRepo(ConfigRepo && src);
 
@@ -296,10 +298,10 @@ public:
     const_iterator cend() const noexcept { return items.cend(); }
     iterator find(const std::string & id) { return items.find(id); }
     const_iterator find(const std::string & id) const { return items.find(id); }
-    ConfigRepoMain & getMain() { return repoMain; }
+    ConfigMain & getMain() { return repoMain; }
 
 private:
-    ConfigRepoMain repoMain;
+    ConfigMain repoMain;
     Container items;
 };
 
@@ -310,8 +312,8 @@ public:
     void setValue(Option::Priority priority, const std::string & section, const std::string & key,
                   std::string && value, bool addRepo = false);
 
-    void readIniFile(const std::string & filePath, Option::Priority priority);
-    void readRepoFiles(const std::string & dirPath, Option::Priority priority);
+    void readIniFile(Option::Priority priority, const std::string & filePath, const std::map<std::string, std::string> & substitutions);
+    void readRepoFiles(Option::Priority priority, const std::string & dirPath, const std::map<std::string, std::string> & substitutions);
 
     ConfigMain & main() { return cfgMain; }
     ConfigRepos & repos() { return cfgRepos; }
