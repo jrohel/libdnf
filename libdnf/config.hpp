@@ -11,6 +11,8 @@
 #include <memory>
 #include <string>
 
+namespace libdnf {
+
 /*  Function converts a human readable variation specifying days, hours, minutes or seconds
     and returns an integer number of seconds.
     Note that due to historical president -1 means "never", so this accepts
@@ -322,5 +324,7 @@ private:
     ConfigMain cfgMain;
     ConfigRepos cfgRepos;
 };
+
+}
 
 #endif

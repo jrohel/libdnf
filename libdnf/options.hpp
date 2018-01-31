@@ -33,6 +33,8 @@
 #include <vector>
 #include <sstream>
 
+namespace libdnf {
+
 template <typename T>
 bool fromString(T & out, const std::string & in, std::ios_base & (*manipulator)(std::ios_base &))
 {
@@ -185,7 +187,7 @@ public:
     T fromString(const std::string & value) const
     {
         T val;
-        if (::fromString<T>(val, value, std::dec))
+        if (libdnf::fromString<T>(val, value, std::dec))
             return val;
         throw Exception(_("invalid value"));
     }
@@ -363,7 +365,7 @@ public:
     T fromString(const std::string & value) const
     {
         T val;
-        if (::fromString<T>(val, value, std::dec))
+        if (libdnf::fromString<T>(val, value, std::dec))
             return val;
         throw Exception(_("invalid value"));
     }
@@ -745,5 +747,6 @@ protected:
     ValueType value;
 };
 
+}
 
 #endif

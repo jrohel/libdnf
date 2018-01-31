@@ -19,6 +19,7 @@
     #include "libdnf/utils/regex/regex.hpp"
     #include "libdnf/options.hpp"
     #include "libdnf/config.hpp"
+    using namespace libdnf;
 %}
 
 %include <exception.i>

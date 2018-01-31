@@ -24,6 +24,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+namespace libdnf {
+
 void OptionPath::test(const std::string & value) const
 {
     if (absPath && value[0] != '/')
@@ -32,4 +34,6 @@ void OptionPath::test(const std::string & value) const
     struct stat buffer; 
     if (exists && stat(value.c_str(), &buffer))
         throw Exception(tfm::format(_("given path '%s' does not exist."), value));
+}
+
 }

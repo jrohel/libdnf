@@ -35,6 +35,8 @@
 #include "utils/tinyformat/tinyformat.hpp"
 #include "utils/regex/regex.hpp"
 
+namespace libdnf {
+
 constexpr const char * PERSISTDIR = "/var/lib/dnf"; // :api
 constexpr const char * SYSTEM_CACHEDIR = "/var/cache/dnf";
 
@@ -1132,3 +1134,4 @@ void Configuration::setValue(Option::Priority priority, const std::string& secti
     }
 }
 
+}
