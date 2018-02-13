@@ -31,9 +31,9 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "utils/bgettext/bgettext-lib.h"
-#include "utils/tinyformat/tinyformat.hpp"
-#include "utils/regex/regex.hpp"
+#include "bgettext/bgettext-lib.h"
+#include "tinyformat/tinyformat.hpp"
+#include "regex/regex.hpp"
 
 namespace libdnf {
 

@@ -1,6 +1,4 @@
 SET (LIBDNF_SRCS
-    config.cpp
-    options.cpp
     dnf-advisorypkg.cpp
     dnf-advisoryref.cpp
     dnf-advisory.cpp
@@ -49,9 +47,11 @@ configure_file ("dnf-version.h.in"  ${CMAKE_CURRENT_SOURCE_DIR}/dnf-version.h)
 configure_file ("libdnf.pc.in" ${CMAKE_CURRENT_BINARY_DIR}/libdnf.pc @ONLY)
 
 ADD_SUBDIRECTORY(utils)
+ADD_SUBDIRECTORY(conf)
 ADD_SUBDIRECTORY(sack)
 
 SET(LIBDNF_SRCS ${LIBDNF_SRCS} ${UTILS_SOURCES})
+SET(LIBDNF_SRCS ${LIBDNF_SRCS} ${CONF_SOURCES})
 SET(LIBDNF_SRCS ${LIBDNF_SRCS} ${SACK_SOURCES})
 
 ADD_LIBRARY(libdnf SHARED ${LIBDNF_SRCS})
@@ -102,8 +102,6 @@ SET(LIBHAWKEY_headers
 
 SET(LIBDNF_headers
     ${LIBDNF_headers}
-    config.hpp
-    options.hpp
     dnf-advisory.h
     dnf-advisorypkg.h
     dnf-advisoryref.h
@@ -145,6 +143,8 @@ IF (WITH_SWDB)
         dnf-swdb-db-sql.h
         dnf-swdb-sql.h)
 ENDIF()
+
+SET(LIBDNF_headers ${LIBDNF_headers} ${CONF_HEADERS})
 
 # gir generation
 # taken from https://github.com/ufo-kit/libuca/blob/master/src/CMakeLists.txt

@@ -17,8 +17,8 @@
     // make SWIG wrap following headers
     #include <iterator>
     #include "libdnf/utils/regex/regex.hpp"
-    #include "libdnf/options.hpp"
-    #include "libdnf/config.hpp"
+    #include "libdnf/conf/options.hpp"
+    #include "libdnf/conf/config.hpp"
     using namespace libdnf;
 %}
 
@@ -39,7 +39,7 @@
 
 // make SWIG look into following headers
 // ============================
-//%include "libdnf/options.hpp"
+//%include "libdnf/conf/options.hpp"
 // ============================
 
 // for SWIG < 3.0.0
@@ -290,7 +290,7 @@ public:
 %template(ConfigReposIterator) Iterator<ConfigRepos>;
 
 // ============================
-//%include "libdnf/config.hpp"
+//%include "libdnf/conf/config.hpp"
 // ============================
 
 class Config;
