@@ -1,4 +1,4 @@
-%module config
+%module conf
 
 %include <stdint.i>
 %include <std_map.i>
