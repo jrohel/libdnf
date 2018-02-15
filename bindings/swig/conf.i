@@ -81,12 +81,12 @@ public:
     const typename ParentOptionType::ValueType getValue() const;
     const typename ParentOptionType::ValueType getDefaultValue() const;
     std::string getValueString() const override;
-    %extend {
-        int getPriority() const { return static_cast<int>($self->getPriority()); }
-        void set(int priority, const typename ParentOptionType::ValueType & value) { $self->set(static_cast<Option::Priority>(priority), value); }
-        void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
-    }
 };
+%extend OptionChild {
+    int getPriority() const { return static_cast<int>($self->getPriority()); }
+    void set(int priority, const typename ParentOptionType::ValueType & value) { $self->set(static_cast<Option::Priority>(priority), value); }
+    void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
+}
 
 template <class ParentOptionType>
 class OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type> : public Option {
@@ -94,29 +94,31 @@ public:
     const std::string & getValue() const;
     const std::string & getDefaultValue() const;
     std::string getValueString() const override;
-    %extend {
-        int getPriority() const { return static_cast<int>($self->getPriority()); }
-        void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
-    }
 };
+/*%extend OptionChild<ParentOptionType> {
+    int getPriority() const { return static_cast<int>($self->getPriority()); }
+    void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
+}*/
 
 template <typename T>
 class OptionNumber : public Option {
 public:
     typedef T ValueType;
 
-    OptionNumber(T defaultValue, T min = std::numeric_limits<T>::min(), T max = std::numeric_limits<T>::max());
+    OptionNumber(T defaultValue, T min, T max);
+    OptionNumber(T defaultValue, T min);
+    OptionNumber(T defaultValue);
     void test(T value) const;
     T fromString(const std::string & value) const;
     T getValue() const;
     T getDefaultValue() const;
     std::string toString(T value) const;
     std::string getValueString() const override;
-    %extend {
-        void set(int priority, T value) { $self->set(static_cast<Option::Priority>(priority), value); }
-        void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
-    }
 };
+%extend OptionNumber {
+    void set(int priority, T value) { $self->set(static_cast<Option::Priority>(priority), value); }
+    void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
+}
 
 class OptionBool : public Option {
 public:
@@ -136,6 +138,7 @@ public:
 
     %extend {
         void set(int priority, bool value) { $self->set(static_cast<Option::Priority>(priority), value); }
+        void set(int priority, int value) { $self->set(static_cast<Option::Priority>(priority), value); }
         void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
     }
 };
@@ -224,6 +227,23 @@ public:
     }
 };
 
+%template(OptionNumberInt32) OptionNumber<std::int32_t>;
+class OptionSeconds : public OptionNumber<std::int32_t> {
+public:
+    typedef int ValueType;
+    OptionSeconds(ValueType defaultValue, ValueType min, ValueType max);
+    OptionSeconds(ValueType defaultValue, ValueType min);
+    OptionSeconds(ValueType defaultValue);
+    ValueType getValue() const;
+    ValueType getDefaultValue() const;
+    std::string toString(ValueType value) const;
+    std::string getValueString() const override;
+    %extend {
+        void set(int priority, ValueType value) { $self->set(static_cast<Option::Priority>(priority), value); }
+        void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
+    }
+};
+
 class OptionPath : public OptionString {
 public:
     OptionPath(const std::string & defaultValue, bool exists = false, bool absPath = false);
@@ -235,7 +255,7 @@ public:
     }
 };
 
-class OptionStringMap : public Option {
+/*class OptionStringMap : public Option {
 public:
     typedef std::map<std::string, std::string> ValueType;
 
@@ -251,18 +271,20 @@ public:
         void set(int priority, const ValueType & value) { $self->set(static_cast<Option::Priority>(priority), value); }
         void set(int priority, const std::string & value) { $self->set(static_cast<Option::Priority>(priority), value); }
     }
-};
+};*/
 
 
 /* Instantiate templates */
-%template(OptionNumberInt32) OptionNumber<std::int32_t>;
 %template(OptionNumberUInt32) OptionNumber<std::uint32_t>;
+%template(OptionNumberFloat) OptionNumber<float>;
 %template(OptionEnumString) OptionEnum<std::string>;
 %template(OptionChildBool) OptionChild<OptionBool>;
 %template(OptionChildString) OptionChild<OptionString>;
 %template(OptionChildStringList) OptionChild<OptionStringList>;
 %template(OptionChildNumberUInt32) OptionChild< OptionNumber<std::uint32_t> >;
+%template(OptionChildNumberFloat) OptionChild< OptionNumber<float> >;
 %template(OptionChildEnumString) OptionChild< OptionEnum<std::string> >;
+%template(OptionChildSeconds) OptionChild<OptionSeconds>;
 
 %template(VectorString) std::vector<std::string>;
 %template(PairStringString) std::pair<std::string, std::string>;
@@ -287,22 +309,12 @@ public:
 %}
 
 %template(OptionBindsIterator) Iterator<OptionBinds>;
-%template(ConfigReposIterator) Iterator<ConfigRepos>;
 
 // ============================
 //%include "libdnf/conf/config.hpp"
 // ============================
 
 class Config;
-
-class Substitution : public std::pair<std::string, std::string>
-{
-public:
-    Substitution(const std::string & key, const std::string & value);
-};
-
-%template(VectorSubstitution) std::vector<Substitution>;
-%template(OptionListSubstitution) OptionList<Substitution>;
 
 %ignore OptionBinding::OptionBinding();
 %ignore OptionBinding::OptionBinding(const OptionBinding & src);
@@ -335,8 +347,6 @@ public:
     ConfigMain();
     ~ConfigMain();
 
-//    OptionStringMap & substitutions();
-//    OptionString & arch();
     OptionNumber<std::int32_t> & debugLevel();
     OptionNumber<std::int32_t> & errorLevel();
     OptionString & installRoot();
@@ -357,10 +367,6 @@ public:
     OptionStringList & installOnlyPkgs();
     OptionStringList & groupPackageTypes();
 
-    /*  NOTE: If you set this to 2, then because it keeps the current
-    kernel it means if you ever install an "old" kernel it'll get rid
-    of the newest one so you probably want to use 3 as a minimum
-    ... if you turn it on. */
     OptionNumber<std::uint32_t> & installOnlyLimit();
 
     OptionStringList & tsFlags();
@@ -373,7 +379,7 @@ public:
     OptionBool & obsoletes();
     OptionBool & showDupesFromRepos();
     OptionBool & exitOnLock();
-    OptionNumber<std::int32_t> & metadataTimerSync();
+    OptionSeconds & metadataTimerSync();
     OptionStringList & disableExcludes();
     OptionEnum<std::string> & multilibPolicy(); // :api
     OptionBool & best(); // :api
@@ -426,10 +432,10 @@ public:
     OptionNumber<std::uint32_t> & bandwidth();
     OptionNumber<std::uint32_t> & minRate();
     OptionEnum<std::string> & ipResolve();
-    OptionNumber<std::uint32_t> & throttle();
-    OptionNumber<std::uint32_t> & timeout();
+    OptionNumber<float> & throttle();
+    OptionSeconds & timeout();
     OptionNumber<std::uint32_t> & maxParallelDownloads();
-    OptionNumber<std::uint32_t> & metadataExpire();
+    OptionSeconds & metadataExpire();
     OptionString & sslCaCert();
     OptionBool & sslVerify();
     OptionString & sslClientCert();
@@ -437,93 +443,6 @@ public:
     OptionBool & deltaRpm();
     OptionNumber<std::uint32_t> & deltaRpmPercentage();
 
-    %extend {
-        OptionNumber<std::int32_t> & debuglevel() { return $self->debugLevel(); }
-        OptionNumber<std::int32_t> & errorlevel() { return $self->errorLevel(); }
-        OptionString & installroot() { return $self->installRoot(); }
-        OptionString & config_file_path() { return $self->configFilePath(); }
-        OptionStringList & pluginpath() { return $self->pluginPath(); }
-        OptionStringList & pluginconfpath() { return $self->pluginConfPath(); }
-        OptionString & persistdir() { return $self->persistDir(); }
-        OptionBool & transformdb() { return $self->transformDb(); }
-        OptionBool & reset_nice() { return $self->resetNice(); }
-        OptionString & system_cachedir() { return $self->systemCacheDir(); }
-        OptionBool & cacheonly() { return $self->cacheOnly(); }
-        OptionBool & keepcache() { return $self->keepCache(); }
-        OptionString & logdir() { return $self->logDir(); }
-        OptionStringList & reposdir() { return $self->reposDir(); }
-        OptionBool & debug_solver() { return $self->debugSolver(); }
-        OptionStringList & installonlypkgs() { return $self->installOnlyPkgs(); }
-        OptionStringList & group_package_types() { return $self->groupPackageTypes(); }
-
-        /*  NOTE: If you set this to 2, then because it keeps the current
-        kernel it means if you ever install an "old" kernel it'll get rid
-        of the newest one so you probably want to use 3 as a minimum
-        ... if you turn it on. */
-        OptionNumber<std::uint32_t> & installonly_limit() { return $self->installOnlyLimit(); }
-
-        OptionStringList & tsflags() { return $self->tsFlags(); }
-        OptionBool & assumeyes() { return $self->assumeYes(); }
-        OptionBool & assumeno() { return $self->assumeNo(); }
-        OptionBool & check_config_file_age() { return $self->checkConfigFileAge(); }
-        OptionBool & defaultyes() { return $self->defaultYes(); }
-        OptionBool & diskspacecheck() { return $self->diskSpaceCheck(); }
-        OptionBool & localpkg_gpgcheck() { return $self->localPkgGpgCheck(); }
-        OptionBool & showdupesfromrepos() { return $self->showDupesFromRepos(); }
-        OptionBool & exit_on_lock() { return $self->exitOnLock(); }
-        OptionNumber<std::int32_t> & metadata_timer_sync() { return $self->metadataTimerSync(); }
-        OptionStringList & disable_excludes() { return $self->disableExcludes(); }
-        OptionEnum<std::string> & multilib_policy() { return $self->multilibPolicy(); } // :api
-        OptionBool & install_weak_deps() { return $self->installWeakDeps(); }
-        OptionString & bugtracker_url() { return $self->bugtrackerUrl(); }
-        OptionString & color_list_installed_older() { return $self->colorListInstalledOlder(); }
-        OptionString & color_list_installed_newer() { return $self->colorListInstalledNewer(); }
-        OptionString & color_list_installed_reinstall() { return $self->colorListInstalledReinstall(); }
-        OptionString & color_list_installed_extra() { return $self->colorListInstalledExtra(); }
-        OptionString & color_list_available_upgrade() { return $self->colorListAvailableUpgrade(); }
-        OptionString & color_list_available_downgrade() { return $self->colorListAvailableDowngrade(); }
-        OptionString & color_list_available_reinstall() { return $self->colorListAvailableReinstall(); }
-        OptionString & color_list_available_install() { return $self->colorListAvailableInstall(); }
-        OptionString & color_update_installed() { return $self->colorUpdateInstalled(); }
-        OptionString & color_update_local() { return $self->colorUpdateLocal(); }
-        OptionString & color_update_remote() { return $self->colorUpdateRemote(); }
-        OptionString & color_search_match() { return $self->colorSearchMatch(); }
-        OptionBool & history_record() { return $self->historyRecord(); }
-        OptionStringList & history_record_packages() { return $self->historyRecordPackages(); }
-        OptionString & rpmverbosity() { return $self->rpmVerbosity(); }
-        OptionBool & skip_broken() { return $self->skipBroken(); } // :yum-compatibility
-        OptionBool & autocheck_running_kernel() { return $self->autocheckRunningKernel(); } // :yum-compatibility
-        OptionBool & clean_requirements_on_remove() { return $self->cleanRequirementsOnRemove(); }
-        OptionEnum<std::string> & history_list_view() { return $self->historyListView(); }
-        OptionBool & upgrade_group_objects_upgrade() { return $self->upgradeGroupObjectsUpgrade(); }
-        OptionPath & destdir() { return $self->destDir(); }
-        OptionBool & downloadonly() { return $self->downloadOnly(); }
-        OptionBool & ignorearch() { return $self->ignoreArch(); }
-
-
-        // Repo main config
-        OptionString & cachedir() { return $self->cacheDir(); }
-        OptionBool & fastestmirror() { return $self->fastestMirror(); }
-        OptionStringList & excludepkgs() { return $self->excludePkgs(); }
-        OptionStringList & exclude() { return $self->excludePkgs(); }
-        OptionStringList & includepkgs() { return $self->includePkgs(); }
-        OptionString & proxy_username() { return $self->proxyUsername(); }
-        OptionString & proxy_password() { return $self->proxyPassword(); }
-        OptionStringList & protected_packages() { return $self->protectedPackages(); }
-        OptionBool & gpgcheck() { return $self->gpgCheck(); }
-        OptionBool & repo_gpgcheck() { return $self->repoGpgCheck(); }
-        OptionBool & enablegroups() { return $self->enableGroups(); }
-        OptionNumber<std::uint32_t> & minrate() { return $self->minRate(); }
-        OptionEnum<std::string> & ip_resolve() { return $self->ipResolve(); }
-        OptionNumber<std::uint32_t> & max_parallel_downloads() { return $self->maxParallelDownloads(); }
-        OptionNumber<std::uint32_t> & metadata_expire() { return $self->metadataExpire(); }
-        OptionString & sslcacert() { return $self->sslCaCert(); }
-        OptionBool & sslverify() { return $self->sslVerify(); }
-        OptionString & sslclientcert() { return $self->sslClientCert(); }
-        OptionString & sslclientkey() { return $self->sslClientKey(); }
-        OptionBool & deltarpm() { return $self->deltaRpm(); }
-        OptionNumber<std::uint32_t> & deltarpm_percentage() { return $self->deltaRpmPercentage(); }
-    }
 };
 
 class ConfigRepo : public Config {
@@ -556,10 +475,10 @@ public:
     OptionChild<OptionNumber<std::uint32_t> > & bandwidth();
     OptionChild<OptionNumber<std::uint32_t> > & minRate();
     OptionChild<OptionEnum<std::string> > & ipResolve();
-    OptionChild<OptionNumber<std::uint32_t> > & throttle();
-    OptionChild<OptionNumber<std::uint32_t> > & timeout();
+    OptionChild<OptionNumber<float> > & throttle();
+    OptionChild<OptionSeconds> & timeout();
     OptionChild<OptionNumber<std::uint32_t> > & maxParallelDownloads();
-    OptionChild<OptionNumber<std::uint32_t> > & metadataExpire();
+    OptionChild<OptionSeconds> & metadataExpire();
     OptionNumber<std::int32_t> & cost();
     OptionNumber<std::int32_t> & priority();
     OptionChild<OptionString> & sslCaCert();
@@ -573,71 +492,122 @@ public:
     OptionString & enabledMetadata();
     // yum compatibility options
     OptionEnum<std::string> & failoverMethod();
-
-    %extend {
-        OptionChild<OptionString> & basecachedir() { return $self->baseCacheDir(); }
-        OptionStringList & baseurl() { return $self->baseUrl(); }
-        OptionString & mirrorlist() { return $self->mirrorList(); }
-        OptionString & metalink() { return $self->metaLink(); }
-        OptionString & mediaid() { return $self->mediaId(); }
-        OptionStringList & gpgkey() { return $self->gpgKey(); }
-        OptionChild<OptionStringList> & excludepkgs() { return $self->excludePkgs(); }
-        OptionChild<OptionStringList> & exclude() { return $self->excludePkgs(); }
-        OptionChild<OptionStringList> & includepkgs() { return $self->includePkgs(); }
-        OptionChild<OptionBool> & fastestmirror() { return $self->fastestMirror(); }
-        OptionChild<OptionString> & proxy_username() { return $self->proxyUsername(); }
-        OptionChild<OptionString> & proxy_password() { return $self->proxyPassword(); }
-        OptionChild<OptionStringList> & protected_packages() { return $self->protectedPackages(); }
-        OptionChild<OptionBool> & gpgcheck() { return $self->gpgCheck(); }
-        OptionChild<OptionBool> & repo_gpgcheck() { return $self->repoGpgCheck(); }
-        OptionChild<OptionBool> & enablegroups() { return $self->enableGroups(); }
-        OptionChild<OptionNumber<std::uint32_t> > & minrate() { return $self->minRate(); }
-        OptionChild<OptionEnum<std::string> > & ip_resolve() { return $self->ipResolve(); }
-        OptionChild<OptionNumber<std::uint32_t> > & max_parallel_downloads() { return $self->maxParallelDownloads(); }
-        OptionChild<OptionNumber<std::uint32_t> > & metadata_expire() { return $self->metadataExpire(); }
-        OptionChild<OptionString> & sslcacert() { return $self->sslCaCert(); }
-        OptionChild<OptionBool> & sslverify() { return $self->sslVerify(); }
-        OptionChild<OptionString> & sslclientcert() { return $self->sslClientCert(); }
-        OptionChild<OptionString> & sslclientkey() { return $self->sslClientKey(); }
-        OptionChild<OptionBool> & deltarpm() { return $self->deltaRpm(); }
-        OptionChild<OptionNumber<std::uint32_t> > & deltarpm_percentage() { return $self->deltaRpmPercentage(); }
-        OptionBool & skip_if_unavailable() { return $self->skipIfUnavailable(); }
-        // option recognized by other tools, e.g. gnome-software, but unused in dnf
-        OptionString & enabled_metadata() { return $self->enabledMetadata(); }
-        // yum compatibility options
-        OptionEnum<std::string> & failovermethod() { return $self->failoverMethod(); }
-    }
 };
 
-class ConfigRepos {
-public:
-    ConfigRepo & at(const std::string & id);
-    const ConfigRepo & at(const std::string & id) const;
-    bool empty() const noexcept;
-    std::size_t size() const noexcept;
-    ConfigMain & getMain();
+%pythoncode %{
+# Compatible name aliases
 
-    %extend {
-        void add(const std::string & id) { $self->add(id); }
-    }
-};
+ConfigMain.debuglevel = ConfigMain.debugLevel
+ConfigMain.errorlevel = ConfigMain.errorLevel
+ConfigMain.installroot = ConfigMain.installRoot
+ConfigMain.config_file_path = ConfigMain.configFilePath
+ConfigMain.pluginpath = ConfigMain.pluginPath
+ConfigMain.pluginconfpath = ConfigMain.pluginConfPath
+ConfigMain.persistdir = ConfigMain.persistDir
+ConfigMain.transformdb = ConfigMain.transformDb
+ConfigMain.reset_nice = ConfigMain.resetNice
+ConfigMain.system_cachedir = ConfigMain.systemCacheDir
+ConfigMain.cacheonly = ConfigMain.cacheOnly
+ConfigMain.keepcache = ConfigMain.keepCache
+ConfigMain.logdir = ConfigMain.logDir
+ConfigMain.reposdir = ConfigMain.reposDir
+ConfigMain.debug_solver = ConfigMain.debugSolver
+ConfigMain.installonlypkgs = ConfigMain.installOnlyPkgs
+ConfigMain.group_package_types = ConfigMain.groupPackageTypes
+ConfigMain.installonly_limit = ConfigMain.installOnlyLimit
 
-class Configuration {
-public:
-    ConfigMain & main();
-    ConfigRepos & repos();
+ConfigMain.tsflags = ConfigMain.tsFlags
+ConfigMain.assumeyes = ConfigMain.assumeYes
+ConfigMain.assumeno = ConfigMain.assumeNo
+ConfigMain.check_config_file_age = ConfigMain.checkConfigFileAge
+ConfigMain.defaultyes = ConfigMain.defaultYes
+ConfigMain.diskspacecheck = ConfigMain.diskSpaceCheck
+ConfigMain.localpkg_gpgcheck = ConfigMain.localPkgGpgCheck
+ConfigMain.showdupesfromrepos = ConfigMain.showDupesFromRepos
+ConfigMain.exit_on_lock = ConfigMain.exitOnLock
+ConfigMain.metadata_timer_sync = ConfigMain.metadataTimerSync
+ConfigMain.disable_excludes = ConfigMain.disableExcludes
+ConfigMain.multilib_policy = ConfigMain.multilibPolicy  # :api
+ConfigMain.install_weak_deps = ConfigMain.installWeakDeps
+ConfigMain.bugtracker_url = ConfigMain.bugtrackerUrl
+ConfigMain.color_list_installed_older = ConfigMain.colorListInstalledOlder
+ConfigMain.color_list_installed_newer = ConfigMain.colorListInstalledNewer
+ConfigMain.color_list_installed_reinstall = ConfigMain.colorListInstalledReinstall
+ConfigMain.color_list_installed_extra = ConfigMain.colorListInstalledExtra
+ConfigMain.color_list_available_upgrade = ConfigMain.colorListAvailableUpgrade
+ConfigMain.color_list_available_downgrade = ConfigMain.colorListAvailableDowngrade
+ConfigMain.color_list_available_reinstall = ConfigMain.colorListAvailableReinstall
+ConfigMain.color_list_available_install = ConfigMain.colorListAvailableInstall
+ConfigMain.color_update_installed = ConfigMain.colorUpdateInstalled
+ConfigMain.color_update_local = ConfigMain.colorUpdateLocal
+ConfigMain.color_update_remote = ConfigMain.colorUpdateRemote
+ConfigMain.color_search_match = ConfigMain.colorSearchMatch
+ConfigMain.history_record = ConfigMain.historyRecord
+ConfigMain.history_record_packages = ConfigMain.historyRecordPackages
+ConfigMain.rpmverbosity = ConfigMain.rpmVerbosity
+ConfigMain.skip_broken = ConfigMain.skipBroken  # :yum-compatibility
+ConfigMain.autocheck_running_kernel = ConfigMain.autocheckRunningKernel  # :yum-compatibility
+ConfigMain.clean_requirements_on_remove = ConfigMain.cleanRequirementsOnRemove
+ConfigMain.history_list_view = ConfigMain.historyListView
+ConfigMain.upgrade_group_objects_upgrade = ConfigMain.upgradeGroupObjectsUpgrade
+ConfigMain.destdir = ConfigMain.destDir
+ConfigMain.downloadonly = ConfigMain.downloadOnly
+ConfigMain.ignorearch = ConfigMain.ignoreArch
 
-    %extend {
-        void setValue(int priority, const std::string & section, const std::string & key,
-                      const std::string & value, bool addRepo = false)
-        {
-            $self->setValue(static_cast<Option::Priority>(priority), section, key, value, addRepo);
-        }
-        void readIniFile(int priority, const std::string & filePath, const std::map<std::string, std::string> & substitutions) { $self->readIniFile(static_cast<Option::Priority>(priority), filePath, substitutions); }
-        void readRepoFiles(int priority, const std::string & dirPath, const std::map<std::string, std::string> & substitutions) { $self->readRepoFiles(static_cast<Option::Priority>(priority), dirPath, substitutions); }
-    }
-};
 
+# Repo main config
+ConfigMain.cachedir = ConfigMain.cacheDir
+ConfigMain.fastestmirror = ConfigMain.fastestMirror
+ConfigMain.excludepkgs = ConfigMain.excludePkgs
+ConfigMain.exclude = ConfigMain.excludePkgs
+ConfigMain.includepkgs = ConfigMain.includePkgs
+ConfigMain.proxy_username = ConfigMain.proxyUsername
+ConfigMain.proxy_password = ConfigMain.proxyPassword
+ConfigMain.protected_packages = ConfigMain.protectedPackages
+ConfigMain.gpgcheck = ConfigMain.gpgCheck
+ConfigMain.repo_gpgcheck = ConfigMain.repoGpgCheck
+ConfigMain.enablegroups = ConfigMain.enableGroups
+ConfigMain.minrate = ConfigMain.minRate
+ConfigMain.ip_resolve = ConfigMain.ipResolve
+ConfigMain.max_parallel_downloads = ConfigMain.maxParallelDownloads
+ConfigMain.metadata_expire = ConfigMain.metadataExpire
+ConfigMain.sslcacert = ConfigMain.sslCaCert
+ConfigMain.sslverify = ConfigMain.sslVerify
+ConfigMain.sslclientcert = ConfigMain.sslClientCert
+ConfigMain.sslclientkey = ConfigMain.sslClientKey
+ConfigMain.deltarpm = ConfigMain.deltaRpm
+ConfigMain.deltarpm_percentage = ConfigMain.deltaRpmPercentage
+
+ConfigRepo.basecachedir = ConfigRepo.baseCacheDir
+ConfigRepo.baseurl = ConfigRepo.baseUrl
+ConfigRepo.mirrorlist = ConfigRepo.mirrorList
+ConfigRepo.metalink = ConfigRepo.metaLink
+ConfigRepo.mediaid = ConfigRepo.mediaId
+ConfigRepo.gpgkey = ConfigRepo.gpgKey
+ConfigRepo.excludepkgs = ConfigRepo.excludePkgs
+ConfigRepo.exclude = ConfigRepo.excludePkgs
+ConfigRepo.includepkgs = ConfigRepo.includePkgs
+ConfigRepo.fastestmirror = ConfigRepo.fastestMirror
+ConfigRepo.proxy_username = ConfigRepo.proxyUsername
+ConfigRepo.proxy_password = ConfigRepo.proxyPassword
+ConfigRepo.protected_packages = ConfigRepo.protectedPackages
+ConfigRepo.gpgcheck = ConfigRepo.gpgCheck
+ConfigRepo.repo_gpgcheck = ConfigRepo.repoGpgCheck
+ConfigRepo.enablegroups = ConfigRepo.enableGroups
+ConfigRepo.minrate = ConfigRepo.minRate
+ConfigRepo.ip_resolve = ConfigRepo.ipResolve
+ConfigRepo.max_parallel_downloads = ConfigRepo.maxParallelDownloads
+ConfigRepo.metadata_expire = ConfigRepo.metadataExpire
+ConfigRepo.sslcacert = ConfigRepo.sslCaCert
+ConfigRepo.sslverify = ConfigRepo.sslVerify
+ConfigRepo.sslclientcert = ConfigRepo.sslClientCert
+ConfigRepo.sslclientkey = ConfigRepo.sslClientKey
+ConfigRepo.deltarpm = ConfigRepo.deltaRpm
+ConfigRepo.deltarpm_percentage = ConfigRepo.deltaRpmPercentage
+ConfigRepo.skip_if_unavailable = ConfigRepo.skipIfUnavailable
+ConfigRepo.enabled_metadata = ConfigRepo.enabledMetadata
+ConfigRepo.failovermethod = ConfigRepo.failoverMethod
+%}
 
 %exception __next__() {
     try
@@ -690,34 +660,5 @@ public:
     Iterator<OptionBinds> __iter__()
     {
         return Iterator<OptionBinds>($self->begin(), $self->end());
-    }
-}
-
-%template(PairStringConfigRepo) std::pair<std::string, ConfigRepo *>;
-%extend Iterator<ConfigRepos> {
-    std::pair<std::string, ConfigRepo *> __next__()
-    {
-        if ($self->cur != $self->end) {
-            auto & id = $self->cur->first;
-            auto pValue = &($self->cur++)->second;
-            return {id, pValue};
-        }
-        throw StopIterator();
-    }
-    std::pair<std::string, ConfigRepo *> next()
-    {
-        if ($self->cur != $self->end) {
-            auto & id = $self->cur->first;
-            auto pValue = &($self->cur++)->second;
-            return {id, pValue};
-        }
-        throw StopIterator();
-    }
-}
-
-%extend ConfigRepos {
-    Iterator<ConfigRepos> __iter__()
-    {
-        return Iterator<ConfigRepos>($self->begin(), $self->end());
     }
 }

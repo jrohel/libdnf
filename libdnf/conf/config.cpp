@@ -22,7 +22,10 @@
 
 #include <algorithm>
 #include <array>
+#include <exception>
 #include <cctype>
+#include <istream>
+#include <ostream>
 #include <fstream>
 #include <utility>
 
@@ -53,44 +56,16 @@ const std::vector<std::string> INSTALLONLYPKGS{"kernel", "kernel-PAE",
 
 constexpr const char * BUGTRACKER="https://bugzilla.redhat.com/enter_bug.cgi?product=Fedora&component=dnf";
 
+/*  Function converts a friendly bandwidth option to bytes.  The input
+    should be a string containing a (possibly floating point)
+    number followed by an optional single character unit. Valid
+    units are 'k', 'M', 'G'. Case is ignored. The convention that
+    1k = 1024 bytes is used.
 
-int strToSeconds(const std::string & str)
-{
-    if (str.empty())
-        throw std::runtime_error(_("no value specified"));
-
-    if (str == "-1" || str == "never") // Special cache timeout, meaning never
-        return -1;
-
-    std::size_t idx;
-    auto res = std::stod(str, &idx);
-    if (res < 0)
-        throw std::runtime_error(tfm::format(_("seconds value '%s' must not be negative"), str));
-
-    if (idx < str.length()) {
-        if (idx < str.length() - 1)
-            throw std::runtime_error(tfm::format(_("could not convert '%s' to seconds"), str));
-        switch (str.back()) {
-            case 's': case 'S':
-                break;
-            case 'm': case 'M':
-                res *= 60;
-                break;
-            case 'h': case 'H':
-                res *= 60 * 60;
-                break;
-            case 'd': case 'D':
-                res *= 60 * 60 * 24;
-                break;
-            default:
-                throw std::runtime_error(tfm::format(_("unknown unit '%s'"), str.back()));
-        }
-    }
-
-    return res;
-}
-
-int strToBytes(const std::string & str)
+    Valid inputs: 100, 123M, 45.6k, 12.4G, 100K, 786.3, 0.
+    Invalid inputs: -10, -0.1, 45.6L, 123Mb.
+*/
+static int strToBytes(const std::string & str)
 {
     if (str.empty())
         throw std::runtime_error(_("no value specified"));
@@ -155,7 +130,13 @@ static void addFromFiles(std::ostream & out, const std::string & globPath)
     globfree(&globBuf);
 }
 
-std::string resolveGlobs(const std::string & strWithGlobs)
+/* Replaces globs (like /etc/foo.d/\\*.foo) by content of matching files.
+ * Ignores comment lines (start with '#') and blank lines in files.
+ * Result:
+ * Words delimited by spaces. Characters ',' and '\n' are replaced by spaces.
+ * Extra spaces are removed.
+ */
+static std::string resolveGlobs(const std::string & strWithGlobs)
 {
     std::ostringstream res;
     std::string::size_type start{0};
@@ -184,12 +165,6 @@ std::string resolveGlobs(const std::string & strWithGlobs)
     return res.str();
 }
 
-static bool endsWith(const std::string & str, const std::string & suffix)
-{
-    return str.size() >= suffix.size()
-        && 0 == str.compare(str.size()-suffix.size(), suffix.size(), suffix);
-}
-
 template<typename T>
 static void addToList(T & option, Option::Priority priority, const typename T::ValueType & value)
 {
@@ -210,41 +185,6 @@ static void addToList(T & option, Option::Priority priority, const std::string &
     option.set(priority, value);
     tmp.insert(tmp.end(), option.getValue().begin(), option.getValue().end());
     option.set(priority, tmp);
-}
-
-
-// ============= Substitution class ================
-
-std::ostream & operator<<(std::ostream & os, const Substitution & subst)
-{
-    os << subst.first << " = " << subst.second;
-    return os;
-}
-
-std::istream & operator>>(std::istream & is, Substitution & subst)
-{
-    std::string value;
-
-    std::getline(is, value, '=');
-    auto start = value.find_first_not_of(" \t\r");
-    if (start == std::string::npos)
-        throw std::runtime_error("Empty input");
-    auto end = value.find_last_not_of(" \t\r");
-    subst.first = value.substr(start, 1 + end - start);
-
-    if (is.eof()) {
-        subst.second.clear();
-    } else {
-        std::getline(is, value);
-        start = value.find_first_not_of(" \t\r");
-        if (start == std::string::npos) {
-            subst.second.clear();
-        } else {
-            end = value.find_last_not_of(" \t\r");
-            subst.second = value.substr(start, 1 + end - start);
-        }
-    }
-    return is;
 }
 
 
@@ -321,12 +261,6 @@ private:
     friend class ConfigMain;
     Config & owner;
 
-    OptionStringMap substitutions{std::map<std::string, std::string>{}};
-    OptionBinding substitutionsBinding{owner, substitutions, "substitutions"};
-
-    OptionList<Substitution> substitutionsO{std::vector<Substitution>{}};
-    OptionBinding substitutionsBindingO{owner, substitutionsO, "substitutionsO"};
-
     OptionString arch{nullptr};
     OptionBinding archBinding{owner, arch, "arch"};
 
@@ -391,7 +325,15 @@ private:
     OptionStringList groupPackageTypes{GROUP_PACKAGE_TYPES};
     OptionBinding groupPackageTypesBinding{owner, groupPackageTypes, "group_package_types"};
 
-    OptionNumber<std::uint32_t> installOnlyLimit{3, 2};
+    OptionNumber<std::uint32_t> installOnlyLimit{3, 0, 
+        [](const std::string & value)->std::uint32_t{
+            if (value == "<off>")
+                return 0;
+            std::uint32_t val;
+            libdnf::fromString<std::uint32_t>(val, value, std::dec);
+            return val;
+        }
+    };
     OptionBinding installOnlyLimitBinding{owner, installOnlyLimit, "installonly_limit"};
 
     OptionStringList tsFlags{std::vector<std::string>{}};
@@ -428,13 +370,8 @@ private:
     OptionBool exitOnLock{false};
     OptionBinding exitOnLockBinding{owner, exitOnLock, "exit_on_lock"};
 
-    OptionNumber<std::int32_t> metadataTimerSync{60 * 60 * 3}; // 3 hours
-    OptionBinding metadataTimerSyncBinding{owner, metadataTimerSync, "metadata_timer_sync",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= metadataTimerSync.getPriority())
-                metadataTimerSync.set(priority, strToSeconds(value));
-        }, nullptr
-    };
+    OptionSeconds metadataTimerSync{60 * 60 * 3}; // 3 hours
+    OptionBinding metadataTimerSyncBinding{owner, metadataTimerSync, "metadata_timer_sync"};
 
     OptionStringList disableExcludes{std::vector<std::string>{}};
     OptionBinding disableExcludesBinding{owner, disableExcludes, "disable_excludes"};
@@ -451,26 +388,24 @@ private:
     OptionString bugtrackerUrl{BUGTRACKER};
     OptionBinding bugtrackerUrlBinding{owner, bugtrackerUrl, "bugtracker_url"};
 
-    OptionEnum<std::string> color{"auto", {"auto", "never", "always"}};
-    OptionBinding colorBinding{owner, color, "color",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= color.getPriority()) {
-                const std::array<const char *, 4> always{{"on", "yes", "1", "true"}};
-                const std::array<const char *, 4> never{{"off", "no", "0", "false"}};
-                const std::array<const char *, 2> aut{{"tty", "if-tty"}};
-                std::string tmp;
-                if (std::find(always.begin(), always.end(), value) != always.end())
-                    tmp = "always";
-                else if (std::find(never.begin(), never.end(), value) != never.end())
-                    tmp = "never";
-                else if (std::find(aut.begin(), aut.end(), value) != aut.end())
-                    tmp = "auto";
-                else
-                    tmp = value;
-                color.set(priority, tmp);
-            }
-        }, nullptr
+    OptionEnum<std::string> color{"auto", {"auto", "never", "always"},
+        [](const std::string & value){
+            const std::array<const char *, 4> always{{"on", "yes", "1", "true"}};
+            const std::array<const char *, 4> never{{"off", "no", "0", "false"}};
+            const std::array<const char *, 2> aut{{"tty", "if-tty"}};
+            std::string tmp;
+            if (std::find(always.begin(), always.end(), value) != always.end())
+                tmp = "always";
+            else if (std::find(never.begin(), never.end(), value) != never.end())
+                tmp = "never";
+            else if (std::find(aut.begin(), aut.end(), value) != aut.end())
+                tmp = "auto";
+            else
+                tmp = value;
+            return tmp;
+        }
     };
+    OptionBinding colorBinding{owner, color, "color"};
 
     OptionString colorListInstalledOlder{"bold"};
     OptionBinding colorListInstalledOlderBinding{owner, colorListInstalledOlder, "color_list_installed_older"};
@@ -529,17 +464,15 @@ private:
     OptionBool cleanRequirementsOnRemove{true};
     OptionBinding cleanRequirementsOnRemoveBinding{owner, cleanRequirementsOnRemove, "clean_requirements_on_remove"};
 
-    OptionEnum<std::string> historyListView{"commands", {"single-user-commands", "users", "commands"}};
-    OptionBinding historyListViewBinding{owner, historyListView, "history_list_view",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= historyListView.getPriority()) {
-                if (value == "cmds" || value == "default")
-                    historyListView.set(priority, "commands");
-                else
-                    historyListView.set(priority, value);
-            }
-        }, nullptr
+    OptionEnum<std::string> historyListView{"commands", {"single-user-commands", "users", "commands"},
+        [](const std::string & value){
+            if (value == "cmds" || value == "default")
+                return std::string("commands");
+            else
+                return value;
+        }
     };
+    OptionBinding historyListViewBinding{owner, historyListView, "history_list_view"};
 
     OptionBool upgradeGroupObjectsUpgrade{true}; // :api
     OptionBinding upgradeGroupObjectsUpgradeBinding{owner, upgradeGroupObjectsUpgrade, "upgrade_group_objects_upgrade"};
@@ -587,7 +520,7 @@ private:
         }, nullptr
     };
 
-    OptionString proxy{"", {PROXY_URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionString proxy{"", PROXY_URL_REGEX, true};
     OptionBinding proxyBinding{owner, proxy, "proxy"};
 
     OptionString proxyUsername{nullptr};
@@ -623,61 +556,45 @@ private:
     OptionBool enableGroups{true};
     OptionBinding enableGroupsBinding{owner, enableGroups, "enablegroups"};
 
-    OptionNumber<std::uint32_t> bandwidth{0};
-    OptionBinding bandwidthBinding{owner, bandwidth, "bandwidth",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= bandwidth.getPriority())
-                bandwidth.set(priority, strToBytes(value));
-        }, nullptr
-    };
+    OptionNumber<std::uint32_t> bandwidth{0, strToBytes};
+    OptionBinding bandwidthBinding{owner, bandwidth, "bandwidth"};
 
-    OptionNumber<std::uint32_t> minRate{1000};
-    OptionBinding minRateBinding{owner, minRate, "minrate",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= minRate.getPriority())
-                minRate.set(priority, strToBytes(value));
-        }, nullptr
-    };
+    OptionNumber<std::uint32_t> minRate{1000, strToBytes};
+    OptionBinding minRateBinding{owner, minRate, "minrate"};
 
-    OptionEnum<std::string> ipResolve{"whatever", {"ipv4", "ipv6", "whatever"}};
-    OptionBinding ipResolveBinding{owner, ipResolve, "ip_resolve",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= ipResolve.getPriority()) {
-                auto tmp = value;
-                if (value == "4") tmp = "ipv4";
-                else if (value == "6") tmp = "ipv6";
-                else std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
-                ipResolve.set(priority, tmp);
+    OptionEnum<std::string> ipResolve{"whatever", {"ipv4", "ipv6", "whatever"},
+        [](const std::string & value){
+            auto tmp = value;
+            if (value == "4") tmp = "ipv4";
+            else if (value == "6") tmp = "ipv6";
+            else std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+            return tmp;
+        }
+    };
+    OptionBinding ipResolveBinding{owner, ipResolve, "ip_resolve"};
+
+    OptionNumber<float> throttle{0, 0,
+        [](const std::string & value)->float{
+            if (!value.empty() && value.back()=='%') {
+                std::size_t idx;
+                auto res = std::stod(value, &idx);
+                if (res < 0 || res > 100)
+                    throw std::runtime_error(tfm::format(_("percentage '%s' is out of range"), value));
+                return res/100;
             }
-        }, nullptr
+            return strToBytes(value);
+        }
     };
+    OptionBinding throttleBinding{owner, throttle, "throttle"};
 
-    OptionNumber<std::uint32_t> throttle{0};
-    OptionBinding throttleBinding{owner, throttle, "throttle",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= throttle.getPriority())
-                throttle.set(priority, strToBytes(value));
-        }, nullptr
-    };
-
-    OptionNumber<std::uint32_t> timeout{30};
-    OptionBinding timeoutBinding{owner, timeout, "timeout",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= timeout.getPriority())
-                timeout.set(priority, strToSeconds(value));
-        }, nullptr
-    };
+    OptionSeconds timeout{30};
+    OptionBinding timeoutBinding{owner, timeout, "timeout"};
 
     OptionNumber<std::uint32_t> maxParallelDownloads{3, 1};
     OptionBinding maxParallelDownloadsBinding{owner, maxParallelDownloads, "max_parallel_downloads"};
 
-    OptionNumber<std::uint32_t> metadataExpire{60 * 60 * 48};
-    OptionBinding metadataExpireBinding{owner, metadataExpire, "metadata_expire",
-        [&](Option::Priority priority, const std::string & value){
-            if (priority >= metadataExpire.getPriority())
-                metadataExpire.set(priority, strToSeconds(value));
-        }, nullptr
-    };
+    OptionSeconds metadataExpire{60 * 60 * 48};
+    OptionBinding metadataExpireBinding{owner, metadataExpire, "metadata_expire"};
 
     OptionString sslCaCert{""};
     OptionBinding sslCaCertBinding{owner, sslCaCert, "sslcacert"};
@@ -701,7 +618,7 @@ private:
 ConfigMain::ConfigMain() { pImpl = std::unique_ptr<Impl>(new Impl(*this)); }
 ConfigMain::~ConfigMain() = default;
 
-OptionStringMap & ConfigMain::substitutions() { return pImpl->substitutions; }
+//OptionStringMap & ConfigMain::substitutions() { return pImpl->substitutions; }
 OptionString & ConfigMain::arch() { return pImpl->arch; }
 OptionNumber<std::int32_t> & ConfigMain::debugLevel() { return pImpl->debugLevel; }
 OptionNumber<std::int32_t> & ConfigMain::errorLevel() { return pImpl->errorLevel; }
@@ -733,7 +650,7 @@ OptionBool & ConfigMain::localPkgGpgCheck() { return pImpl->localPkgGpgCheck; }
 OptionBool & ConfigMain::obsoletes() { return pImpl->obsoletes; }
 OptionBool & ConfigMain::showDupesFromRepos() { return pImpl->showDupesFromRepos; }
 OptionBool & ConfigMain::exitOnLock() { return pImpl->exitOnLock; }
-OptionNumber<std::int32_t> & ConfigMain::metadataTimerSync() { return pImpl->metadataTimerSync; }
+OptionSeconds & ConfigMain::metadataTimerSync() { return pImpl->metadataTimerSync; }
 OptionStringList & ConfigMain::disableExcludes() { return pImpl->disableExcludes; }
 OptionEnum<std::string> & ConfigMain::multilibPolicy() { return pImpl->multilibPolicy; }
 OptionBool & ConfigMain::best() { return pImpl->best; }
@@ -785,10 +702,10 @@ OptionBool & ConfigMain::enableGroups() { return pImpl->enableGroups; }
 OptionNumber<std::uint32_t> & ConfigMain::bandwidth() { return pImpl->bandwidth; }
 OptionNumber<std::uint32_t> & ConfigMain::minRate() { return pImpl->minRate; }
 OptionEnum<std::string> & ConfigMain::ipResolve() { return pImpl->ipResolve; }
-OptionNumber<std::uint32_t> & ConfigMain::throttle() { return pImpl->throttle; }
-OptionNumber<std::uint32_t> & ConfigMain::timeout() { return pImpl->timeout; }
+OptionNumber<float> & ConfigMain::throttle() { return pImpl->throttle; }
+OptionSeconds & ConfigMain::timeout() { return pImpl->timeout; }
 OptionNumber<std::uint32_t> & ConfigMain::maxParallelDownloads() { return pImpl->maxParallelDownloads; }
-OptionNumber<std::uint32_t> & ConfigMain::metadataExpire() { return pImpl->metadataExpire; }
+OptionSeconds & ConfigMain::metadataExpire() { return pImpl->metadataExpire; }
 OptionString & ConfigMain::sslCaCert() { return pImpl->sslCaCert; }
 OptionBool & ConfigMain::sslVerify() { return pImpl->sslVerify; }
 OptionString & ConfigMain::sslClientCert() { return pImpl->sslClientCert; }
@@ -815,13 +732,13 @@ private:
     OptionChild<OptionString> baseCacheDir{masterConfig.cacheDir()};
     OptionBinding baseCacheDirBindings{owner, baseCacheDir, "cachedir"};
 
-    OptionStringList baseUrl{std::vector<std::string>{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionStringList baseUrl{std::vector<std::string>{}, URL_REGEX, true};
     OptionBinding baseUrlBinding{owner, baseUrl, "baseurl"};
 
-    OptionString mirrorList{nullptr, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionString mirrorList{nullptr, URL_REGEX, true};
     OptionBinding mirrorListBinding{owner, mirrorList, "mirrorlist"};
 
-    OptionString metaLink{nullptr, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionString metaLink{nullptr, URL_REGEX, true};
     OptionBinding metaLinkBinding{owner, metaLink, "metalink"};
 
     OptionString type{""};
@@ -830,7 +747,7 @@ private:
     OptionString mediaId{""};
     OptionBinding mediaIdBinding{owner, mediaId, "mediaid"};
 
-    OptionStringList gpgKey{std::vector<std::string>{}, {URL_REGEX, REG_EXTENDED | REG_ICASE | REG_NOSUB}};
+    OptionStringList gpgKey{std::vector<std::string>{}, URL_REGEX, true};
     OptionBinding gpgKeyBinding{owner, gpgKey, "gpgkey"};
 
     OptionChild<OptionStringList> excludePkgs{masterConfig.excludePkgs()};
@@ -882,16 +799,16 @@ private:
     OptionChild<OptionEnum<std::string> > ipResolve{masterConfig.ipResolve()};
     OptionBinding ipResolveBinding{owner, ipResolve, "ip_resolve"};
 
-    OptionChild<OptionNumber<std::uint32_t> > throttle{masterConfig.throttle()};
+    OptionChild<OptionNumber<float> > throttle{masterConfig.throttle()};
     OptionBinding throttleBinding{owner, throttle, "throttle"};
 
-    OptionChild<OptionNumber<std::uint32_t> > timeout{masterConfig.timeout()};
+    OptionChild<OptionSeconds> timeout{masterConfig.timeout()};
     OptionBinding timeoutBinding{owner, timeout, "timeout"};
 
     OptionChild<OptionNumber<std::uint32_t> >  maxParallelDownloads{masterConfig.maxParallelDownloads()};
     OptionBinding maxParallelDownloadsBinding{owner, maxParallelDownloads, "max_parallel_downloads"};
 
-    OptionChild<OptionNumber<std::uint32_t> > metadataExpire{masterConfig.metadataExpire()};
+    OptionChild<OptionSeconds> metadataExpire{masterConfig.metadataExpire()};
     OptionBinding metadataExpireBinding{owner, metadataExpire, "metadata_expire"};
 
     OptionNumber<std::int32_t> cost{1000};
@@ -956,10 +873,10 @@ OptionChild<OptionNumber<std::uint32_t> > & ConfigRepo::retries() { return pImpl
 OptionChild<OptionNumber<std::uint32_t> > & ConfigRepo::bandwidth() { return pImpl->bandwidth; }
 OptionChild<OptionNumber<std::uint32_t> > & ConfigRepo::minRate() { return pImpl->minRate; }
 OptionChild<OptionEnum<std::string> > & ConfigRepo::ipResolve() { return pImpl->ipResolve; }
-OptionChild<OptionNumber<std::uint32_t> > & ConfigRepo::throttle() { return pImpl->throttle; }
-OptionChild<OptionNumber<std::uint32_t> > & ConfigRepo::timeout() { return pImpl->timeout; }
+OptionChild<OptionNumber<float> > & ConfigRepo::throttle() { return pImpl->throttle; }
+OptionChild<OptionSeconds> & ConfigRepo::timeout() { return pImpl->timeout; }
 OptionChild<OptionNumber<std::uint32_t> > & ConfigRepo::maxParallelDownloads() { return pImpl->maxParallelDownloads; }
-OptionChild<OptionNumber<std::uint32_t> > & ConfigRepo::metadataExpire() { return pImpl->metadataExpire; }
+OptionChild<OptionSeconds> & ConfigRepo::metadataExpire() { return pImpl->metadataExpire; }
 OptionNumber<std::int32_t> & ConfigRepo::cost() { return pImpl->cost; }
 OptionNumber<std::int32_t> & ConfigRepo::priority() { return pImpl->priority; }
 OptionChild<OptionString> & ConfigRepo::sslCaCert() { return pImpl->sslCaCert; }
@@ -971,167 +888,5 @@ OptionChild<OptionNumber<std::uint32_t> > & ConfigRepo::deltaRpmPercentage() { r
 OptionBool & ConfigRepo::skipIfUnavailable() { return pImpl->skipIfUnavailable; }
 OptionString & ConfigRepo::enabledMetadata() { return pImpl->enabledMetadata; }
 OptionEnum<std::string> & ConfigRepo::failoverMethod() { return pImpl->failoverMethod; }
-
-
-// ============== Repos class =============
-
-ConfigRepos::iterator ConfigRepos::add(const std::string & id)
-{
-    auto item = items.find(id);
-    if (item != items.end())
-        throw std::runtime_error(tfm::format(_("Configuration: Repository with id \"%s\" exist"), id));
-    auto res = items.emplace(id, repoMain);
-    return res.first;
-}
-
-ConfigRepo & ConfigRepos::at(const std::string & id)
-{
-    auto item = items.find(id);
-    if (item == items.end())
-        throw std::runtime_error(tfm::format(_("Configuration: Repository with id \"%s\" does not exist"), id));
-    return item->second;
-}
-
-const ConfigRepo & ConfigRepos::at(const std::string & id) const 
-{
-    auto item = items.find(id);
-    if (item == items.end())
-        throw std::runtime_error(tfm::format(_("Configuration: Repository with id \"%s\" does not exist"), id));
-    return item->second;
-}
-
-
-//  ============= Configuration class ===============
-
-static void substitute(std::string & text, const std::map<std::string, std::string> & substitutions)
-{
-    auto start = text.find_first_of("$");
-    while (start != text.npos)
-    {
-        auto variable = start + 1;
-        if (variable >= text.length())
-            break;
-        auto it = std::find_if_not(text.begin()+variable, text.end(), [](char c){return std::isalnum(c) || c=='_';});
-        auto pastVariable = it != text.end() ? it - text.begin() : text.length(); 
-        auto subst = substitutions.find(text.substr(variable, pastVariable - variable));
-        if (subst != substitutions.end())
-            text.replace(start, pastVariable - start, subst->second);
-        start = text.find_first_of("$", pastVariable);
-    }
-}
-
-void Configuration::readIniFile(Option::Priority priority, const std::string & filePath, const std::map<std::string, std::string> & substitutions)
-{
-    std::ifstream ifs(filePath);
-    if (!ifs)
-        throw std::runtime_error("parseIniFile(): Can't open file");
-    ifs.exceptions(std::ifstream::badbit);
-
-    std::string section;
-    std::string line;
-    std::string key;
-    std::string value;
-    auto wasOptionLine = false;
-    while (!ifs.eof()) {
-        std::getline(ifs, line);
-        auto start = line.find_first_not_of(" \t\r");
-        if (start == std::string::npos)
-            continue;
-        if (line[start] == '#' || line[start] == ';')
-            continue;
-        auto end = line.find_last_not_of(" \t\r");
-
-        if (line[start] == '[') {
-            if (line[end] != ']')
-                throw std::runtime_error("parseIniFile(): Missing ']'");
-            if (wasOptionLine) {
-                substitute(value, substitutions);
-                try {
-                    setValue(priority, section, key, std::move(value), true);
-                } catch (std::exception &) {}
-                wasOptionLine = false;
-            }
-            section = line.substr(start + 1,end - start - 1);
-            continue;
-        }
-        if (section.empty())
-            throw std::runtime_error("parseIniFile(): Missing section header");
-        if (line[start] == '=')
-            throw std::runtime_error("parseIniFile(): Missing key");
-
-        if (start > 0) {
-            if (!wasOptionLine)
-                throw std::runtime_error("parseIniFile(): Illegal continuation line");
-            value += "\n" + line.substr(start, end - start + 1);
-        } else {
-            if (wasOptionLine) {
-                substitute(value, substitutions);
-                try {
-                    setValue(priority, section, key, std::move(value), true);
-                } catch (std::exception &) {}
-            }
-            auto eqlpos = line.find_first_of("=");
-            if (eqlpos == std::string::npos)
-                throw std::runtime_error("parseIniFile(): Missing '='");
-            auto endkeypos = line.find_last_not_of(" \t", eqlpos - 1);
-            auto valuepos = line.find_first_not_of(" \t", eqlpos + 1);
-            key = line.substr(start, endkeypos - start + 1);
-            value = line.substr(valuepos, end - valuepos + 1);
-            wasOptionLine = true;
-        }
-    }
-    if (wasOptionLine) {
-        substitute(value, substitutions);
-        try {
-            setValue(priority, section, key, std::move(value), true);
-        } catch (std::exception &) {}
-    }
-}
-
-void Configuration::readRepoFiles(Option::Priority priority, const std::string & dirPath, const std::map<std::string, std::string> & substitutions)
-{
-    DIR *dp;
-    struct dirent *dirp;
-    if((dp = opendir(dirPath.c_str())) == NULL) {
-        throw std::runtime_error("");
-    }
-
-    errno = 0;
-    while ((dirp = readdir(dp)) != NULL) {
-        auto fname = std::string(dirp->d_name);
-        if (endsWith(fname, ".repo"))
-            readIniFile(priority, dirPath + fname, substitutions);
-        errno = 0;
-    }
-    if (errno) {
-        //log
-    }
-    closedir(dp);
-}
-
-void Configuration::setValue(Option::Priority priority, const std::string& section, const std::string & key, const std::string & value, bool addRepo)
-{
-    setValue(priority, section, key, std::string(value), addRepo);
-}
-
-void Configuration::setValue(Option::Priority priority, const std::string& section, const std::string & key, std::string && value, bool addRepo)
-{
-    if (section == "main") {
-        auto item = main().optBinds().find(key);
-        if (item != main().optBinds().end())
-            item->second.newString(priority, std::move(value));
-        else
-            repos().getMain().optBinds().at(key).newString(priority, std::move(value));
-    } else {
-        auto item = repos().find(section);
-        if (item == repos().end()) {
-            if (addRepo) {
-                item = repos().add(section);
-            } else
-                throw std::runtime_error(tfm::format(_("Configuration: Repository with id \"%s\" does not exist"), section));
-        }
-        item->second.optBinds().at(key).newString(priority, std::move(value));
-    }
-}
 
 }

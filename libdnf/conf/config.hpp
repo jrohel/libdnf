@@ -3,58 +3,14 @@
 
 #include "options.hpp"
 
-#include <exception>
 #include <functional>
-#include <istream>
-#include <ostream>
 #include <map>
 #include <memory>
 #include <string>
 
 namespace libdnf {
 
-/*  Function converts a human readable variation specifying days, hours, minutes or seconds
-    and returns an integer number of seconds.
-    Note that due to historical president -1 means "never", so this accepts
-    that and allows the word never, too.
-
-    Valid inputs: 100, 1.5m, 90s, 1.2d, 1d, 0.1, -1, never.
-    Invalid inputs: -10, -0.1, 45.6Z, 1d6h, 1day, 1y.
-
-    Return value will always be an integer
-*/
-int strToSeconds(const std::string & str);
-
-/*  Function converts a friendly bandwidth option to bytes.  The input
-    should be a string containing a (possibly floating point)
-    number followed by an optional single character unit. Valid
-    units are 'k', 'M', 'G'. Case is ignored. The convention that
-    1k = 1024 bytes is used.
-
-    Valid inputs: 100, 123M, 45.6k, 12.4G, 100K, 786.3, 0.
-    Invalid inputs: -10, -0.1, 45.6L, 123Mb.
-*/
-int strToBytes(const std::string & str);
-
-/* Replaces globs (like /etc/foo.d/\\*.foo) by content of matching files.
- * Ignores comment lines (start with '#') and blank lines in files.
- * Result:
- * Words delimited by spaces. Characters ',' and '\n' are replaced by spaces.
- * Extra spaces are removed.
- */
-std::string resolveGlobs(const std::string & strWithGlobs);
-
 class Config;
-
-class Substitution : public std::pair<std::string, std::string>
-{
-public:
-    Substitution() = default;
-    Substitution(const std::string & key, const std::string & value) : pair(key, value) {}
-};
-
-std::ostream & operator<<(std::ostream & os, const Substitution & subst);
-std::istream & operator>>(std::istream & is, Substitution & subst);
 
 class OptionBinding {
 public:
@@ -121,7 +77,6 @@ public:
     ConfigMain();
     ~ConfigMain();
 
-    OptionStringMap & substitutions();
     OptionString & arch();
     OptionNumber<std::int32_t> & debugLevel();
     OptionNumber<std::int32_t> & errorLevel();
@@ -159,7 +114,7 @@ public:
     OptionBool & obsoletes();
     OptionBool & showDupesFromRepos();
     OptionBool & exitOnLock();
-    OptionNumber<std::int32_t> & metadataTimerSync();
+    OptionSeconds & metadataTimerSync();
     OptionStringList & disableExcludes();
     OptionEnum<std::string> & multilibPolicy(); // :api
     OptionBool & best(); // :api
@@ -211,10 +166,10 @@ public:
     OptionNumber<std::uint32_t> & bandwidth();
     OptionNumber<std::uint32_t> & minRate();
     OptionEnum<std::string> & ipResolve();
-    OptionNumber<std::uint32_t> & throttle();
-    OptionNumber<std::uint32_t> & timeout();
+    OptionNumber<float> & throttle();
+    OptionSeconds & timeout();
     OptionNumber<std::uint32_t> & maxParallelDownloads();
-    OptionNumber<std::uint32_t> & metadataExpire();
+    OptionSeconds & metadataExpire();
     OptionString & sslCaCert();
     OptionBool & sslVerify();
     OptionString & sslClientCert();
@@ -258,10 +213,10 @@ public:
     OptionChild<OptionNumber<std::uint32_t> > & bandwidth();
     OptionChild<OptionNumber<std::uint32_t> > & minRate();
     OptionChild<OptionEnum<std::string> > & ipResolve();
-    OptionChild<OptionNumber<std::uint32_t> > & throttle();
-    OptionChild<OptionNumber<std::uint32_t> > & timeout();
+    OptionChild<OptionNumber<float> > & throttle();
+    OptionChild<OptionSeconds> & timeout();
     OptionChild<OptionNumber<std::uint32_t> > & maxParallelDownloads();
-    OptionChild<OptionNumber<std::uint32_t> > & metadataExpire();
+    OptionChild<OptionSeconds> & metadataExpire();
     OptionNumber<std::int32_t> & cost();
     OptionNumber<std::int32_t> & priority();
     OptionChild<OptionString> & sslCaCert();
@@ -279,50 +234,6 @@ public:
 private:
     class Impl;
     std::unique_ptr<Impl> pImpl;
-};
-
-class ConfigRepos {
-public:
-    typedef std::map<std::string, ConfigRepo> Container;
-    typedef Container::iterator iterator;
-    typedef Container::const_iterator const_iterator;
-
-    iterator add(const std::string & id);
-    ConfigRepo & at(const std::string & id);
-    const ConfigRepo & at(const std::string & id) const;
-    bool empty() const noexcept { return items.empty(); }
-    std::size_t size() const noexcept { return items.size(); }
-    iterator begin() noexcept { return items.begin(); }
-    const_iterator begin() const noexcept { return items.begin(); }
-    const_iterator cbegin() const noexcept { return items.cbegin(); }
-    iterator end() noexcept { return items.end(); }
-    const_iterator end() const noexcept { return items.end(); }
-    const_iterator cend() const noexcept { return items.cend(); }
-    iterator find(const std::string & id) { return items.find(id); }
-    const_iterator find(const std::string & id) const { return items.find(id); }
-    ConfigMain & getMain() { return repoMain; }
-
-private:
-    ConfigMain repoMain;
-    Container items;
-};
-
-class Configuration {
-public:
-    void setValue(Option::Priority priority, const std::string & section, const std::string & key,
-                  const std::string & value, bool addRepo = false);
-    void setValue(Option::Priority priority, const std::string & section, const std::string & key,
-                  std::string && value, bool addRepo = false);
-
-    void readIniFile(Option::Priority priority, const std::string & filePath, const std::map<std::string, std::string> & substitutions);
-    void readRepoFiles(Option::Priority priority, const std::string & dirPath, const std::map<std::string, std::string> & substitutions);
-
-    ConfigMain & main() { return cfgMain; }
-    ConfigRepos & repos() { return cfgRepos; }
-
-private:
-    ConfigMain cfgMain;
-    ConfigRepos cfgRepos;
 };
 
 }

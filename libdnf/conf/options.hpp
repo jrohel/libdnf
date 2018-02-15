@@ -21,48 +21,21 @@
 #ifndef _OPTIONS_HPP
 #define _OPTIONS_HPP
 
-#include "bgettext/bgettext-lib.h"
-#include "tinyformat/tinyformat.hpp"
-#include "regex/regex.hpp"
-
-#include <cctype>
-#include <limits>
-#include <map>
-#include <memory>
+#include <functional>
 #include <string>
 #include <vector>
 #include <sstream>
 
 namespace libdnf {
 
+constexpr const char * defTrueNames[]{"1", "yes", "true", "enabled", nullptr};
+constexpr const char * defFalseNames[]{"0", "no", "false", "disabled", nullptr};
+
 template <typename T>
 bool fromString(T & out, const std::string & in, std::ios_base & (*manipulator)(std::ios_base &))
 {
    std::istringstream iss(in);
    return !(iss >> manipulator >> out).fail();
-}
-
-constexpr const char * defTrueNames[]{"1", "yes", "true", "enabled", nullptr};
-constexpr const char * defFalseNames[]{"0", "no", "false", "disabled", nullptr};
-
-static bool strToBool(bool & out, std::string in, const char * const trueNames[] = defTrueNames,
-               const char * const falseNames[] = defFalseNames)
-{
-    for (auto & ch : in)
-        ch = std::tolower(ch);
-    for (auto it = falseNames; *it; ++it) {
-        if (in == *it) {
-            out = false;
-            return true;
-        }
-    }
-    for (auto it = trueNames; *it; ++it) {
-        if (in == *it) {
-            out = true;
-            return true;
-        }
-    }
-    return false;
 }
 
 class Option {
@@ -85,79 +58,43 @@ public:
         Exception(const char * msg) : runtime_error(msg) {}
     };
 
-    Option(Priority priority = Priority::PRIO_EMPTY) : priority{priority} {}
-
-    virtual Priority getPriority() const { return priority; }
-
+    Option(Priority priority = Priority::PRIO_EMPTY);
+    virtual Priority getPriority() const;
     virtual void set(Priority priority, const std::string & value) = 0;
     virtual std::string getValueString() const = 0;
-
     virtual ~Option() = default;
 
 protected:
     Priority priority;
 };
 
+
 template <class ParentOptionType, class Enable = void>
 class OptionChild : public Option {
 public:
-    OptionChild(const ParentOptionType & parent)
-    : parent(parent) {}
-
-    Priority getPriority() const override { return priority != Priority::PRIO_EMPTY ? priority : parent.getPriority(); }
-
-    void set(Priority priority, const typename ParentOptionType::ValueType & value)
-    {
-        if (priority >= this->priority) {
-            parent.test(value);
-            this->priority = priority;
-            this->value = value;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority)
-            set(priority, parent.fromString(value));
-    }
-
-    const typename ParentOptionType::ValueType getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-    const typename ParentOptionType::ValueType getDefaultValue() const { return parent.getDefaultValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? parent.toString(value) : parent.getValueString();
-    }
+    OptionChild(const ParentOptionType & parent);
+    Priority getPriority() const override;
+    void set(Priority priority, const typename ParentOptionType::ValueType & value);
+    void set(Priority priority, const std::string & value) override;
+    const typename ParentOptionType::ValueType getValue() const;
+    const typename ParentOptionType::ValueType getDefaultValue() const;
+    std::string getValueString() const override;
 
 private:
     const ParentOptionType & parent;
     typename ParentOptionType::ValueType value;
 };
 
+
 template <class ParentOptionType>
 class OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type> : public Option {
 public:
-    OptionChild(const ParentOptionType & parent)
-    : parent(parent) {}
-
-    Priority getPriority() const override { return priority != Priority::PRIO_EMPTY ? priority : parent.getPriority(); }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority) {
-            parent.test(value);
-            this->priority = priority;
-            this->value = value;
-        }
-    }
-
-    const std::string & getValue() const { return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); }
-    const std::string & getDefaultValue() const { return parent.getDefaultValue(); }
-
-    std::string getValueString() const override
-    {
-        return priority != Priority::PRIO_EMPTY ? value : parent.getValue();
-    }
+    OptionChild(const ParentOptionType & parent);
+    Priority getPriority() const override;
+    void set(Priority priority, const std::string & value) override;
+    const std::string & getValue() const;
+    const std::string & getDefaultValue() const;
+    std::string getValueString() const override;
 
 private:
     const ParentOptionType & parent;
@@ -169,61 +106,31 @@ class OptionNumber : public Option {
 //    """An option representing an value."""
 public:
     typedef T ValueType;
+    typedef std::function<ValueType (const std::string &)> FromStringFunc;
 
-    OptionNumber(T defaultValue, T min = std::numeric_limits<T>::min(), T max = std::numeric_limits<T>::max())
-    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, min{min}, max{max}, value{defaultValue} { test(defaultValue); }
-
-    void test(T value) const
-    {
-        if (value > max)
-            throw Exception(tfm::format(_("given value [%d] should be less than "
-                                            "allowed value [%d]."), value, max));
-        else if (value < min)
-            throw Exception(tfm::format(_("given value [%d] should be greater than "
-                                            "allowed value [%d]."), value, min));
-    }
-
-
-    T fromString(const std::string & value) const
-    {
-        T val;
-        if (libdnf::fromString<T>(val, value, std::dec))
-            return val;
-        throw Exception(_("invalid value"));
-    }
-
-    void set(Priority priority, T value)
-    {
-        if (priority >= this->priority) {
-            test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        set(priority, fromString(value));
-    }
-
-    T getValue() const { return value; }
-    T getDefaultValue() const { return defaultValue; }
-
-    std::string toString(T value) const
-    {
-        std::ostringstream oss;
-        oss << value;
-        return oss.str();
-    }
-
-    std::string getValueString() const override { return toString(value); }
+    OptionNumber(T defaultValue, T min, T max);
+    OptionNumber(T defaultValue, T min);
+    OptionNumber(T defaultValue);
+    OptionNumber(T defaultValue, T min, T max, FromStringFunc && fromStringFunc);
+    OptionNumber(T defaultValue, T min, FromStringFunc && fromStringFunc);
+    OptionNumber(T defaultValue, FromStringFunc && fromStringFunc);
+    void test(ValueType value) const;
+    T fromString(const std::string & value) const;
+    void set(Priority priority, ValueType value);
+    void set(Priority priority, const std::string & value) override;
+    T getValue() const;
+    T getDefaultValue() const;
+    std::string toString(ValueType value) const;
+    std::string getValueString() const override;
 
 protected:
-    T defaultValue;
-    T min;
-    T max;
-    T value;
+    FromStringFunc fromStringUser;
+    ValueType defaultValue;
+    ValueType min;
+    ValueType max;
+    ValueType value;
 };
+
 
 class OptionBool : public Option {
 /*   """An option representing a boolean value.  The value can be one
@@ -232,49 +139,18 @@ class OptionBool : public Option {
 public:
     typedef bool ValueType;
 
-    OptionBool(bool defaultValue, const char * const trueVals[], const char * const falseVals[])
-    : Option{Priority::PRIO_DEFAULT}, trueNames{trueVals}, falseNames{falseVals}, defaultValue{defaultValue}, value{defaultValue} {}
-
-    OptionBool(bool defaultValue)
-    : OptionBool{defaultValue, nullptr, nullptr} {}
-
-    void test(bool) const {}
-
-    bool fromString(const std::string & value) const
-    {
-        bool val;
-        if (strToBool(val, value, getTrueNames(), getFalseNames()))
-            return val;
-        throw Exception(tfm::format(_("invalid boolean value '%s'"), value));
-    }
-
-    void set(Priority priority, bool value)
-    {
-        if (priority >= this->priority) {
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        set(priority, fromString(value));
-    }
-
-    bool getValue() const noexcept { return value; }
-    bool getDefaultValue() const noexcept { return defaultValue; }
-
-    std::string toString(bool value) const
-    {
-        std::ostringstream oss;
-        oss << value;
-        return oss.str();
-    }
-
-    std::string getValueString() const override { return toString(value); }
-
-    const char * const * getTrueNames() const noexcept { return trueNames ? trueNames : defTrueNames; }
-    const char * const * getFalseNames() const noexcept { return falseNames ? falseNames : defFalseNames; }
+    OptionBool(bool defaultValue, const char * const trueVals[], const char * const falseVals[]);
+    OptionBool(bool defaultValue);
+    void test(bool) const;
+    bool fromString(const std::string & value) const;
+    void set(Priority priority, bool value);
+    void set(Priority priority, const std::string & value) override;
+    bool getValue() const noexcept;
+    bool getDefaultValue() const noexcept;
+    std::string toString(bool value) const;
+    std::string getValueString() const override;
+    const char * const * getTrueNames() const noexcept;
+    const char * const * getFalseNames() const noexcept;
 
 protected:
     const char * const * const trueNames;
@@ -283,469 +159,317 @@ protected:
     bool value;
 };
 
+
 class OptionString : public Option {
 public:
     typedef std::string ValueType;
 
-    OptionString(const std::string & defaultValue)
-    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
-
-    OptionString(const char * defaultValue)
-    {
-        if (defaultValue) {
-            this->value = this->defaultValue = defaultValue;
-            this->priority = Priority::PRIO_DEFAULT;
-        }
-    }
-
-    OptionString(const std::string & defaultValue, Regex && regex)
-    : Option{Priority::PRIO_DEFAULT}, regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
-
-    OptionString(const char * defaultValue, Regex && regex)
-    : regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}
-    {
-        if (defaultValue) {
-            this->defaultValue = defaultValue;
-            test(this->defaultValue);
-            this->value = this->defaultValue;
-            this->priority = Priority::PRIO_DEFAULT;
-        }
-    }
-
-    void test(const std::string & value) const
-    {
-        if (regex && !regex->match(value.c_str()))
-            throw Exception(tfm::format(_("'%s' is not an allowed value"), value));
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority) {
-            test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    const std::string & getValue() const
-    {
-        if (priority == Priority::PRIO_EMPTY)
-            throw Exception(_("GetValue(): Value not set"));
-        return value;
-    }
-
-    const std::string & getDefaultValue() const noexcept { return defaultValue; }
-
-    std::string getValueString() const override { return getValue(); }
+    OptionString(const std::string & defaultValue);
+    OptionString(const char * defaultValue);
+    OptionString(const std::string & defaultValue, const std::string & regex, bool icase);
+    OptionString(const char * defaultValue, const std::string & regex, bool icase);
+    void test(const std::string & value) const;
+    void set(Priority priority, const std::string & value) override;
+    const std::string & getValue() const;
+    const std::string & getDefaultValue() const noexcept;
+    std::string getValueString() const override;
 
 protected:
-    std::unique_ptr<Regex> regex;
+    std::string regex;
+    bool icase;
     std::string defaultValue;
     std::string value;
 };
+
 
 template <typename T>
 class OptionEnum : public Option {
 public:
     typedef T ValueType;
+    typedef std::function<ValueType (const std::string &)> FromStringFunc;
 
-    OptionEnum(T defaultValue, const std::vector<T> & enumVals)
-    : Option{Priority::PRIO_DEFAULT}, enumVals{enumVals}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
-
-    OptionEnum(T defaultValue, std::vector<T> && enumVals)
-    : Option{Priority::PRIO_DEFAULT}, enumVals{std::move(enumVals)}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
-
-    void test(T value) const
-    {
-        auto it = std::find(enumVals.begin(), enumVals.end(), value);
-        if (it == enumVals.end())
-            throw Exception(tfm::format(_("'%s' is not an allowed value"), value));
-    }
-
-    T fromString(const std::string & value) const
-    {
-        T val;
-        if (libdnf::fromString<T>(val, value, std::dec))
-            return val;
-        throw Exception(_("invalid value"));
-    }
-
-    void set(Priority priority, T value)
-    {
-        if (priority >= this->priority) {
-            test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        set(priority, fromString(value));
-    }
-
-    T getValue() const { return value; }
-    T getDefaultValue() const { return defaultValue; }
-
-    std::string toString(T value) const
-    {
-        std::ostringstream oss;
-        oss << value;
-        return oss.str();
-    }
-
-    std::string getValueString() const override { return toString(value); }
+    OptionEnum(ValueType defaultValue, const std::vector<ValueType> & enumVals);
+    OptionEnum(ValueType defaultValue, std::vector<ValueType> && enumVals);
+    OptionEnum(ValueType defaultValue, const std::vector<ValueType> & enumVals, FromStringFunc && fromStringFunc);
+    OptionEnum(ValueType defaultValue, std::vector<ValueType> && enumVals, FromStringFunc && fromStringFunc);
+    void test(ValueType value) const;
+    ValueType fromString(const std::string & value) const;
+    void set(Priority priority, ValueType value);
+    void set(Priority priority, const std::string & value) override;
+    T getValue() const;
+    T getDefaultValue() const;
+    std::string toString(ValueType value) const;
+    std::string getValueString() const override;
 
 protected:
-    std::vector<T> enumVals;
-    T defaultValue;
-    T value;
+    FromStringFunc fromStringUser;
+    std::vector<ValueType> enumVals;
+    ValueType defaultValue;
+    ValueType value;
 };
+
 
 template <>
 class OptionEnum<std::string> : public Option {
 public:
     typedef std::string ValueType;
+    typedef std::function<ValueType (const std::string &)> FromStringFunc;
 
-    OptionEnum(const std::string & defaultValue, const std::vector<std::string> & enumVals)
-    : Option{Priority::PRIO_DEFAULT}, enumVals{enumVals}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
-
-    OptionEnum(const std::string & defaultValue, std::vector<std::string> && enumVals)
-    : Option{Priority::PRIO_DEFAULT}, enumVals{std::move(enumVals)}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
-
-    void test(const std::string & value) const
-    {
-        auto it = std::find(enumVals.begin(), enumVals.end(), value);
-        if (it == enumVals.end())
-            throw Exception(tfm::format(_("'%s' is not an allowed value"), value));
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority) {
-            test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    const std::string & getValue() const { return value; }
-    const std::string & getDefaultValue() const { return defaultValue; }
-
-    std::string getValueString() const override { return value; }
+    OptionEnum(const std::string & defaultValue, const std::vector<ValueType> & enumVals);
+    OptionEnum(const std::string & defaultValue, std::vector<ValueType> && enumVals);
+    OptionEnum(const std::string & defaultValue, const std::vector<ValueType> & enumVals, FromStringFunc && fromStringFunc);
+    OptionEnum(const std::string & defaultValue, std::vector<ValueType> && enumVals, FromStringFunc && fromStringFunc);
+    void test(const std::string & value) const;
+    std::string fromString(const std::string & value) const;
+    void set(Priority priority, const std::string & value) override;
+    const std::string & getValue() const;
+    const std::string & getDefaultValue() const;
+    std::string getValueString() const override;
 
 protected:
-    std::vector<std::string> enumVals;
-    std::string defaultValue;
-    std::string value;
-};
-
-template<typename T>
-class OptionList : public Option {
-public:
-    typedef std::vector<T> ValueType;
-
-    OptionList(const ValueType & defaultValue)
-    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
-
-    OptionList(const std::string & defaultValue)
-    : Option{Priority::PRIO_DEFAULT} {
-        this->value = this->defaultValue = fromString(defaultValue);
-    }
-
-    void test(const ValueType &) const {}
-
-    ValueType fromString(const std::string & value) const
-    {
-        ValueType tmp;
-        std::string::size_type start{0};
-        while (start < value.length()) {
-            auto end = value.find_first_of(" ,\n", start);
-            T tmpItem;
-            if (end == std::string::npos) {
-                std::istringstream iss(value.substr(start));
-                iss >> tmpItem;
-                tmp.push_back(std::move(tmpItem));
-                break;
-            }
-            if (end-start != 0) {
-                std::istringstream iss(value.substr(start, end - start));
-                iss >> tmpItem;
-                tmp.push_back(std::move(tmpItem));
-            }
-            start = end + 1;
-        }
-        return tmp;
-    }
-
-    void set(Priority priority, const ValueType & value) {
-        if (priority >= this->priority) {
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority)
-            set(priority, fromString(value));
-    }
-
-    const ValueType & getValue() const { return value; }
-    const ValueType & getDefaultValue() const { return defaultValue; }
-
-    std::string toString(const ValueType & value) const
-    {
-        std::ostringstream oss;
-        oss << "[";
-        bool next{false};
-        for (auto & val : value) {
-            if (next)
-                oss << ", ";
-            oss << val;
-        }
-        oss << "]";
-        return oss.str();
-    }
-
-    std::string getValueString() const override { return toString(value); }
-
-protected:
+    FromStringFunc fromStringUser;
+    std::vector<ValueType> enumVals;
     ValueType defaultValue;
     ValueType value;
 };
+
 
 class OptionStringList : public Option {
 public:
     typedef std::vector<std::string> ValueType;
 
-    OptionStringList(const ValueType & defaultValue)
-    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
-
-    OptionStringList(const ValueType & defaultValue, Regex && regex)
-    : Option{Priority::PRIO_DEFAULT}, regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))}, defaultValue{defaultValue}, value{defaultValue} { test(defaultValue); }
-
-    OptionStringList(const std::string & defaultValue)
-    : Option{Priority::PRIO_DEFAULT} {
-        this->value = this->defaultValue = fromString(defaultValue);
-    }
-
-    OptionStringList(const std::string & defaultValue, Regex && regex)
-    : Option{Priority::PRIO_DEFAULT}, regex{std::unique_ptr<Regex>(new Regex(std::move(regex)))} {
-        this->defaultValue = fromString(defaultValue);
-        test(this->defaultValue);
-        value = this->defaultValue;
-    }
-
-    void test(const std::vector<std::string> & value) const
-    {
-        if (regex) {
-            for (const auto & val : value) {
-                if (!regex->match(val.c_str()))
-                    throw Exception(tfm::format(_("'%s' is not an allowed value"), val));
-            }
-        }
-    }
-
-    ValueType fromString(const std::string & value) const
-    {
-        std::vector<std::string> tmp;
-        std::string::size_type start{0};
-        while (start < value.length()) {
-            auto end = value.find_first_of(" ,\n", start);
-            if (end == std::string::npos) {
-                tmp.push_back(value.substr(start));
-                break;
-            }
-            if (end-start != 0)
-                tmp.push_back(value.substr(start, end - start));
-            start = end + 1;
-        }
-        return tmp;
-    }
-
-    void set(Priority priority, const ValueType & value) {
-        if (priority >= this->priority) {
-            test(value);
-            this->value = value;
-            this->priority = priority;
-        }
-    }
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority)
-            set(priority, fromString(value));
-    }
-
-    const ValueType & getValue() const { return value; }
-    const ValueType & getDefaultValue() const { return defaultValue; }
-
-    std::string toString(const ValueType & value) const
-    {
-        std::ostringstream oss;
-        oss << "[";
-        bool next{false};
-        for (auto & val : value) {
-            if (next)
-                oss << ", ";
-            else
-                next = true;
-            oss << val;
-        }
-        oss << "]";
-        return oss.str();
-    }
-
-    std::string getValueString() const override { return toString(value); }
+    OptionStringList(const ValueType & defaultValue);
+    OptionStringList(const ValueType & defaultValue, const std::string & regex, bool icase);
+    OptionStringList(const std::string & defaultValue);
+    OptionStringList(const std::string & defaultValue, const std::string & regex, bool icase);
+    void test(const std::vector<std::string> & value) const;
+    ValueType fromString(const std::string & value) const;
+    void set(Priority priority, const ValueType & value);
+    void set(Priority priority, const std::string & value) override;
+    const ValueType & getValue() const;
+    const ValueType & getDefaultValue() const;
+    std::string toString(const ValueType & value) const;
+    std::string getValueString() const override;
 
 protected:
-    std::unique_ptr<Regex> regex;
+    std::string regex;
+    bool icase;
     ValueType defaultValue;
     ValueType value;
+};
+
+/* An option representing an integer value of seconds.
+
+   Valid inputs: 100, 1.5m, 90s, 1.2d, 1d, 0xF, 0.1, -1, never.
+   Invalid inputs: -10, -0.1, 45.6Z, 1d6h, 1day, 1y.
+
+   Return value will always be an integer
+*/
+class OptionSeconds : public OptionNumber<std::int32_t> {
+public:
+    OptionSeconds(ValueType defaultValue, ValueType min, ValueType max);
+    OptionSeconds(ValueType defaultValue, ValueType min);
+    OptionSeconds(ValueType defaultValue);
+    ValueType fromString(const std::string & value) const;
+    using OptionNumber::set;
+    void set(Priority priority, const std::string & value) override;
 };
 
 //Option for file path which can validate path existence.
 class OptionPath : public OptionString {
 public:
-    OptionPath(const std::string & defaultValue, bool exists = false, bool absPath = false)
-    : OptionString{defaultValue}, exists{exists}, absPath{absPath}
-    {
-        this->defaultValue = removeFileProt(this->defaultValue);
-        test(this->defaultValue);
-        this->value = this->defaultValue;
-    }
-
-    OptionPath(const char * defaultValue, bool exists = false, bool absPath = false)
-    : OptionString{defaultValue}, exists{exists}, absPath{absPath}
-    {
-        if (defaultValue) {
-            this->defaultValue = removeFileProt(this->defaultValue);
-            test(this->defaultValue);
-            this->value = this->defaultValue;
-        }
-    }
-
-    OptionPath(const std::string & defaultValue, Regex && regex, bool exists = false, bool absPath = false)
-    : OptionString{removeFileProt(defaultValue), std::move(regex)}, exists{exists}, absPath{absPath} 
-    {
-        this->defaultValue = removeFileProt(this->defaultValue);
-        test(this->defaultValue);
-        this->value = this->defaultValue;
-    }
-
-    OptionPath(const char * defaultValue, Regex && regex, bool exists = false, bool absPath = false)
-    : OptionString{defaultValue, std::move(regex)}, exists{exists}, absPath{absPath}
-    {
-        if (defaultValue) {
-            this->defaultValue = removeFileProt(this->defaultValue);
-            test(this->defaultValue);
-            this->value = this->defaultValue;
-        }
-    }
-
+    OptionPath(const std::string & defaultValue, bool exists = false, bool absPath = false);
+    OptionPath(const char * defaultValue, bool exists = false, bool absPath = false);
+    OptionPath(const std::string & defaultValue, const std::string & regex, bool icase, bool exists = false, bool absPath = false);
+    OptionPath(const char * defaultValue, const std::string & regex, bool icase, bool exists = false, bool absPath = false);
     void test(const std::string & value) const;
-
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority) {
-            OptionString::test(value);
-            auto val = removeFileProt(value);
-            test(val);
-            this->value = val;
-            this->priority = priority;
-        }
-    }
-
-    std::string getValueString() const override { return getValue(); }
+    void set(Priority priority, const std::string & value) override;
 
 protected:
-    static std::string removeFileProt(const std::string & value)
-    {
-        if (value.compare(0, 7, "file://") == 0)
-            return value.substr(7);
-        return value;
-    }
-
     bool exists;
     bool absPath;
 };
 
-class OptionStringMap : public Option {
-public:
-    typedef std::map<std::string, std::string> ValueType;
 
-    OptionStringMap(const ValueType & defaultValue)
-    : Option{Priority::PRIO_DEFAULT}, defaultValue{defaultValue}, value{defaultValue} {}
+// implementation of inline methods
+template <class ParentOptionType, class Enable>
+inline OptionChild<ParentOptionType, Enable>::OptionChild(const ParentOptionType & parent)
+: parent(parent) {}
 
-    OptionStringMap(const std::string & defaultValue)
-    : Option{Priority::PRIO_DEFAULT} {
-        this->value = this->defaultValue = fromString(defaultValue);
+template <class ParentOptionType, class Enable>
+inline Option::Priority OptionChild<ParentOptionType, Enable>::getPriority() const
+{
+    return priority != Priority::PRIO_EMPTY ? priority : parent.getPriority(); 
+}
+
+template <class ParentOptionType, class Enable>
+inline void OptionChild<ParentOptionType, Enable>::set(Priority priority, const typename ParentOptionType::ValueType & value)
+{
+    if (priority >= this->priority) {
+        parent.test(value);
+        this->priority = priority;
+        this->value = value;
     }
+}
 
-    void test(const ValueType &) const {}
+template <class ParentOptionType, class Enable>
+inline void OptionChild<ParentOptionType, Enable>::set(Priority priority, const std::string & value)
+{
+    if (priority >= this->priority)
+        set(priority, parent.fromString(value));
+}
 
-    ValueType fromString(const std::string & value) const
-    {
-        ValueType tmp;
-        auto start = value.find_first_not_of(" \t\r");
-        while (start != std::string::npos)
-        {
-            if (value[start] == '=')
-                throw Exception(_("Missing key"));
-            auto delimpos = value.find_first_of(", \n", start);
-            if ( delimpos == std::string::npos)
-                delimpos = value.length();
-            auto eqlpos = value.find_first_of("=", start);
-            if (eqlpos > delimpos)
-                throw Exception(_("Missing '='"));
-            auto endkeypos = value.find_last_not_of(" \t", eqlpos - 1);
-            auto valuepos = value.find_first_not_of(" \t", eqlpos + 1);
-            auto endvaluepos = value.find_last_not_of(" \t", delimpos - 1);
-            auto first = value.substr(start, endkeypos - start + 1);
-            auto second = value.substr(valuepos, endvaluepos - valuepos + 1);
-            tmp[std::move(first)] = std::move(second);
-            start = value.find_first_not_of(" \t\r", delimpos);
-        }
-        return tmp;
+template <class ParentOptionType, class Enable>
+inline const typename ParentOptionType::ValueType OptionChild<ParentOptionType, Enable>::getValue() const
+{
+    return priority != Priority::PRIO_EMPTY ? value : parent.getValue(); 
+}
+
+template <class ParentOptionType, class Enable>
+inline const typename ParentOptionType::ValueType OptionChild<ParentOptionType, Enable>::getDefaultValue() const { return parent.getDefaultValue(); }
+
+template <class ParentOptionType, class Enable>
+inline std::string OptionChild<ParentOptionType, Enable>::getValueString() const
+{
+    return priority != Priority::PRIO_EMPTY ? parent.toString(value) : parent.getValueString();
+}
+
+
+template <class ParentOptionType>
+inline OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type>::OptionChild(const ParentOptionType & parent)
+: parent(parent) {}
+
+template <class ParentOptionType>
+inline Option::Priority OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type>::getPriority() const
+{
+    return priority != Priority::PRIO_EMPTY ? priority : parent.getPriority(); 
+}
+
+template <class ParentOptionType>
+inline void OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type>::set(Priority priority, const std::string & value)
+{
+    if (priority >= this->priority) {
+        parent.test(value);
+        this->priority = priority;
+        this->value = value;
     }
+}
 
-    void set(Priority priority, const ValueType & value) {
-        if (priority >= this->priority) {
-            this->value = value;
-            this->priority = priority;
-        }
-    }
+template <class ParentOptionType>
+inline const std::string & OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type>::getValue() const
+{
+    return priority != Priority::PRIO_EMPTY ? value : parent.getValue();
+}
 
-    void set(Priority priority, const std::string & value) override
-    {
-        if (priority >= this->priority)
-            set(priority, fromString(value));
-    }
+template <class ParentOptionType>
+inline const std::string & OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type>::getDefaultValue() const
+{
+    return parent.getDefaultValue();
+}
 
-    const ValueType & getValue() const { return value; }
-    const ValueType & getDefaultValue() const { return defaultValue; }
+template <class ParentOptionType>
+inline std::string OptionChild<ParentOptionType, typename std::enable_if<std::is_same<typename ParentOptionType::ValueType, std::string>::value>::type>::getValueString() const
+{
+    return priority != Priority::PRIO_EMPTY ? value : parent.getValue();
+}
 
-    std::string toString(const ValueType & value) const
-    {
-        std::ostringstream oss;
-        oss << "[";
-        bool next{false};
-        for (auto & val : value) {
-            if (next)
-                oss << ", ";
-            oss << val.first << "=" << val.second;
-        }
-        oss << "]";
-        return oss.str();
-    }
+inline Option::Option(Priority priority)
+: priority(priority) {}
 
-    std::string getValueString() const override { return toString(value); }
+inline Option::Priority Option::getPriority() const
+{
+    return priority;
+}
 
-protected:
-    ValueType defaultValue;
-    ValueType value;
-};
+template <typename T>
+inline T OptionNumber<T>::getValue() const
+{
+    return value;
+}
+
+template <typename T>
+inline T OptionNumber<T>::getDefaultValue() const
+{
+    return defaultValue;
+}
+
+template <typename T>
+inline std::string OptionNumber<T>::getValueString() const
+{
+    return toString(value); 
+}
+
+inline void OptionBool::test(bool) const {}
+
+inline bool OptionBool::getValue() const noexcept
+{
+    return value;
+}
+
+inline bool OptionBool::getDefaultValue() const noexcept
+{
+    return defaultValue;
+}
+
+inline std::string OptionBool::getValueString() const
+{
+    return toString(value);
+}
+
+inline const char * const * OptionBool::getTrueNames() const noexcept
+{
+    return trueNames ? trueNames : defTrueNames;
+}
+
+inline const char * const * OptionBool::getFalseNames() const noexcept
+{
+    return falseNames ? falseNames : defFalseNames; 
+}
+
+inline const std::string & OptionString::getDefaultValue() const noexcept
+{
+    return defaultValue;
+}
+
+inline std::string OptionString::getValueString() const
+{
+    return getValue();
+}
+
+
+inline const std::string & OptionEnum<std::string>::getValue() const
+{
+    return value;
+}
+
+inline const std::string & OptionEnum<std::string>::getDefaultValue() const
+{
+    return defaultValue;
+}
+
+inline std::string OptionEnum<std::string>::getValueString() const
+{
+    return value;
+}
+
+inline const OptionStringList::ValueType & OptionStringList::getValue() const
+{
+    return value;
+}
+
+inline const OptionStringList::ValueType & OptionStringList::getDefaultValue() const
+{
+    return defaultValue;
+}
+
+inline std::string OptionStringList::getValueString() const
+{
+    return toString(value); 
+}
+
+extern template class OptionNumber<std::int32_t>;
+extern template class OptionNumber<std::uint32_t>;
+extern template class OptionNumber<float>;
 
 }
 
