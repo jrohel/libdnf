@@ -2,7 +2,12 @@
 #include "ModuleDefaultsContainer.hpp"
 #include "../ModulePackageContainer.hpp"
 
-void ModuleDefaultsContainer::fromString(const std::string &content)
+ModuleDefaultsContainer::ModuleDefaultsContainer()
+{
+    prioritizer = std::shared_ptr<ModulemdPrioritizer>(modulemd_prioritizer_new(), g_object_unref);
+}
+
+void ModuleDefaultsContainer::fromString(const std::string &content, int priority)
 {
     GError *error = nullptr;
     g_autoptr(GPtrArray) failures;
@@ -12,7 +17,7 @@ void ModuleDefaultsContainer::fromString(const std::string &content)
     reportFailures(failures);
 }
 
-void ModuleDefaultsContainer::fromFile(const std::string &path)
+void ModuleDefaultsContainer::fromFile(const std::string &path, int priority)
 {
     GError *error = nullptr;
     g_autoptr(GPtrArray) failures;
@@ -43,13 +48,28 @@ void ModuleDefaultsContainer::saveDefaults(GPtrArray *data, int priority)
 
 void ModuleDefaultsContainer::resolve()
 {
+    GError *error = nullptr;
+    auto data = modulemd_prioritizer_resolve(prioritizer.get(), &error);
+    checkAndThrowException<ResolveException>(error);
+
     for (unsigned int i = 0; i < data->len; i++) {
-        void *item = g_ptr_array_index(data, i);
-        if (MODULEMD_IS_DEFAULTS(item)) {
-            auto moduleDefaults = std::shared_ptr<ModulemdDefaults>((ModulemdDefaults *) item, g_object_unref);
-            std::string name = modulemd_defaults_peek_module_name(moduleDefaults.get());
-            defaults.insert(std::make_pair(name, moduleDefaults));
-        }
+        auto item = g_ptr_array_index(data, i);
+        if (!MODULEMD_IS_DEFAULTS(item))
+            continue;
+
+        auto moduleDefaults = std::shared_ptr<ModulemdDefaults>((ModulemdDefaults *) item, g_object_unref);
+        std::string name = modulemd_defaults_peek_module_name(moduleDefaults.get());
+        defaults.insert(std::make_pair(name, moduleDefaults));
+    }
+}
+
+template<typename T>
+void ModuleDefaultsContainer::checkAndThrowException(GError *error)
+{
+    if (error != nullptr) {
+        std::string message = error->message;
+        g_error_free(error);
+        throw T(message);
     }
 }
 

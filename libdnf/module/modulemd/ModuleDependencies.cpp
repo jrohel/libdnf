@@ -1,3 +1,4 @@
+#include <modulemd/modulemd-simpleset.h>
 #include <sstream>
 
 #include "libdnf/utils/utils.hpp"

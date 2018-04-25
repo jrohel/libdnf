@@ -1,3 +1,5 @@
+#include <modulemd/modulemd-simpleset.h>
+#include <utility>
 
 #include "ModuleMetadata.hpp"
 #include "profile/ProfileMaker.hpp"
