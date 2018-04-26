@@ -92,6 +92,10 @@ Summary:        Python 2 bindings for the hawkey library
 BuildRequires:  python2-devel
 %if 0%{?rhel} && 0%{?rhel} <= 7
 BuildRequires:  python-nose
+BuildRequires:  python-gobject
+Requires:       python-gobject
+BuildRequires:  libmodulemd >= 1.4.0
+Requires:       libmodulemd >= 1.4.0
 %else
 BuildRequires:  python2-nose
 %endif
@@ -111,6 +115,11 @@ Summary:        Python 3 bindings for the hawkey library
 %{?python_provide:%python_provide python3-hawkey}
 BuildRequires:  python3-devel
 BuildRequires:  python3-nose
+BuildRequires:  python3-gobject-base
+BuildRequires:  libmodulemd >= 1.4.0
+Requires:       libmodulemd >= 1.4.0
+BuildRequires:  pygobject3-devel
+Requires:       python3-gobject-base
 Requires:       %{name}%{?_isa} = %{version}-%{release}
 # Fix problem with hawkey - dnf version incompatibility
 # Can be deleted for distros where only python3-dnf >= 2.0.0
