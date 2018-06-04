@@ -49,7 +49,7 @@ void ModuleDefaultsContainer::saveDefaults(GPtrArray *data, int priority)
 void ModuleDefaultsContainer::resolve()
 {
     GError *error = nullptr;
-    auto data = modulemd_prioritizer_resolve(prioritizer.get(), &error);
+    g_autoptr(GPtrArray) data = modulemd_prioritizer_resolve(prioritizer.get(), &error);
     checkAndThrowException<ResolveException>(error);
 
     for (unsigned int i = 0; i < data->len; i++) {
@@ -57,6 +57,7 @@ void ModuleDefaultsContainer::resolve()
         if (!MODULEMD_IS_DEFAULTS(item))
             continue;
 
+        g_object_ref(item);
         auto moduleDefaults = std::shared_ptr<ModulemdDefaults>((ModulemdDefaults *) item, g_object_unref);
         std::string name = modulemd_defaults_peek_module_name(moduleDefaults.get());
         defaults.insert(std::make_pair(name, moduleDefaults));
