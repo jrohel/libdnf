@@ -54,6 +54,7 @@ void ContextTest::testLoadModules()
 
     auto sack = dnf_context_get_sack(context);
     auto moduleExcludes = dnf_sack_get_module_excludes(sack);
+    CPPUNIT_ASSERT(moduleExcludes->size() != 0);
 
     auto modules_fn = dnf_repo_get_filename_md(repo, "modules");
 
