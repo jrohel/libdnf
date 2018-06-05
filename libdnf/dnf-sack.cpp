@@ -2282,12 +2282,10 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos)
         nevra.clear();
     }
 
-    for (const auto &rpm : excludeNEVRAs) {
-        nevra.parse(rpm.c_str(), HY_FORM_NEVRA);
-        excludeQuery.addFilter(&nevra, false);
-        nevra.clear();
-    }
+    std::vector<const char *> excludeNEVRAsChars(excludeNEVRAs.size());
+    std::transform(excludeNEVRAs.begin(), excludeNEVRAs.end(), excludeNEVRAsChars.begin(), std::mem_fun_ref(&std::string::c_str));
 
+    excludeQuery.addFilter(HY_PKG_NEVRA, HY_EQ, excludeNEVRAsChars);
     namesQuery.addFilter(HY_PKG_NAME, HY_EQ, names);
     providesQuery.addFilter(HY_PKG_PROVIDES, HY_EQ, names);
 
