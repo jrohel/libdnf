@@ -27,7 +27,13 @@
 #include "dnf-types.h"
 #include "hy-package.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 void dnf_db_ensure_origin_pkg(DnfDb * db, DnfPackage * pkg);
 void dnf_db_ensure_origin_pkglist(DnfDb * db, GPtrArray * pkglist);
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __DNF_DB_H */
