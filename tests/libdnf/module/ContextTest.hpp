@@ -20,7 +20,6 @@ public:
 
 private:
     DnfContext *context;
-    DnfRepo *repo;
     void sackHas(DnfSack *sack, const std::shared_ptr<ModuleMetadata> &module) const;
     void sackHasNot(DnfSack *sack, const std::shared_ptr<ModuleMetadata> &module) const;
 };

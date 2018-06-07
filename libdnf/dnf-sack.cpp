@@ -2154,9 +2154,10 @@ getDependencyModuleStreams(std::vector<std::shared_ptr<ModuleMetadata> > moduleM
 
 void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *install_root)
 {
+    libdnf::Query includeQuery{sack};
     libdnf::Query excludeQuery{sack};
-    libdnf::Query namesQuery{sack};
-    libdnf::Query providesQuery{sack};
+    libdnf::Query excludeNamesQuery{sack};
+    libdnf::Query excludeProvidesQuery{sack};
     libdnf::Nevra nevra;
 
     // read module metadata and defaults from repos
@@ -2240,45 +2241,51 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
         activeStreams.insert(i);
     }
 
-    // collect NEVRAs for active and inactive modules for applying excludes
+    // collect NEVRAs for to be included or excluded
     // TODO: turn into std::vector<const char *> to prevent unecessary conversion?
-    std::vector<std::string> activeNEVRAs;
-    std::vector<std::string> inactiveNEVRAs;
+    std::vector<std::string> includeNEVRAs;
+    std::vector<std::string> excludeNEVRAs;
 
     for (auto & mod : moduleMetadata) {
         auto iter = activeStreams.find(mod->getName());
         bool isActiveStream = (iter == activeStreams.end()) ? false : (iter->second == mod->getStream());
         auto artifacts = mod->getArtifacts();
         if (isActiveStream) {
-            copy(artifacts.begin(), artifacts.end(), std::inserter(activeNEVRAs, activeNEVRAs.end()));
+            copy(artifacts.begin(), artifacts.end(), std::inserter(includeNEVRAs, includeNEVRAs.end()));
         } else {
-            copy(artifacts.begin(), artifacts.end(), std::inserter(inactiveNEVRAs, inactiveNEVRAs.end()));
+            copy(artifacts.begin(), artifacts.end(), std::inserter(excludeNEVRAs, excludeNEVRAs.end()));
         }
     }
 
-    // remove activeNEVRAs from inactiveNEVRAs to prevent excluding them
-    std::vector<std::string> excludeNEVRAs;
-    set_difference(
-        inactiveNEVRAs.begin(), inactiveNEVRAs.end(),
-        activeNEVRAs.begin(), activeNEVRAs.end(),
-        inserter(excludeNEVRAs, excludeNEVRAs.begin())
-    );
+    std::vector<const char *> excludeNEVRAsCString(excludeNEVRAs.size());
+    std::transform(excludeNEVRAs.begin(), excludeNEVRAs.end(), excludeNEVRAsCString.begin(), std::mem_fn(&std::string::c_str));
 
-    std::vector<const char *> names;
-    for (const auto &rpm : activeNEVRAs) {
+    std::vector<const char *> includeNEVRAsCString(includeNEVRAs.size());
+    std::transform(includeNEVRAs.begin(), includeNEVRAs.end(), includeNEVRAsCString.begin(), std::mem_fn(&std::string::c_str));
+
+    std::vector<std::string> names;
+    for (const auto &rpm : includeNEVRAs) {
         nevra.parse(rpm.c_str(), HY_FORM_NEVRA);
-        names.push_back(nevra.getName().c_str());
+        names.push_back(nevra.getName());
         nevra.clear();
     }
+    std::vector<const char *> namesCString(names.size());
+    std::transform(names.begin(), names.end(), namesCString.begin(), std::mem_fn(&std::string::c_str));
 
-    std::vector<const char *> excludeNEVRAsChars(excludeNEVRAs.size());
-    std::transform(excludeNEVRAs.begin(), excludeNEVRAs.end(), excludeNEVRAsChars.begin(), std::mem_fn(&std::string::c_str));
+    //includeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, includeNEVRAsCString);
+    includeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, &includeNEVRAsCString[0]);
 
-    excludeQuery.addFilter(HY_PKG_NEVRA, HY_EQ, excludeNEVRAsChars);
-    namesQuery.addFilter(HY_PKG_NAME, HY_EQ, names);
-    providesQuery.addFilter(HY_PKG_PROVIDES, HY_EQ, names);
+    //excludeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, excludeNEVRAsCString);
+    excludeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, &excludeNEVRAsCString[0]);
+    excludeQuery.queryDifference(includeQuery);
+
+    excludeNamesQuery.addFilter(HY_PKG_NAME, HY_EQ, namesCString);
+    excludeNamesQuery.queryDifference(includeQuery);
+
+    excludeProvidesQuery.addFilter(HY_PKG_PROVIDES, HY_EQ, namesCString);
+    excludeProvidesQuery.queryDifference(includeQuery);
 
     dnf_sack_add_module_excludes(sack, const_cast<DnfPackageSet *>(excludeQuery.runSet()));
-    dnf_sack_add_module_excludes(sack, const_cast<DnfPackageSet *>(namesQuery.runSet()));
-    dnf_sack_add_module_excludes(sack, const_cast<DnfPackageSet *>(providesQuery.runSet()));
+    dnf_sack_add_module_excludes(sack, const_cast<DnfPackageSet *>(excludeNamesQuery.runSet()));
+    dnf_sack_add_module_excludes(sack, const_cast<DnfPackageSet *>(excludeProvidesQuery.runSet()));
 }

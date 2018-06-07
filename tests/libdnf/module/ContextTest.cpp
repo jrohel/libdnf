@@ -19,7 +19,6 @@ void ContextTest::setUp()
 void ContextTest::tearDown()
 {
     g_object_unref(context);
-    g_object_unref(repo);
 }
 
 void ContextTest::testLoadModules()
@@ -38,12 +37,7 @@ void ContextTest::testLoadModules()
     g_assert_no_error(error);
     g_assert(ret);
 
-    /* use this as a throw-away */
-
-    g_autoptr(DnfRepoLoader) repo_loader = dnf_repo_loader_new(context);
-
-    /* load local metadata repo */
-    repo = dnf_repo_loader_get_repo_by_id(repo_loader, "test", &error);
+    DnfRepo *repo = dnf_repo_loader_get_repo_by_id(dnf_context_get_repo_loader(context), "test", &error);
     g_assert_no_error(error);
     g_assert(repo != nullptr);
     g_assert_cmpint(dnf_repo_get_enabled(repo), ==, DNF_REPO_ENABLED_METADATA | DNF_REPO_ENABLED_PACKAGES);
@@ -69,7 +63,6 @@ void ContextTest::testLoadModules()
 
     auto modules = ModuleMetadata::metadataFromString(yamlContent);
     for (const auto &module : modules) {
-
         // default module:stream
         if (module->getName() == "httpd" && module->getStream() == "2.4")
             sackHas(sack, module);
@@ -82,40 +75,32 @@ void ContextTest::testLoadModules()
 
 void ContextTest::sackHas(DnfSack *sack, const std::shared_ptr<ModuleMetadata> &module) const
 {
-    libdnf::Nevra nevra{};
     libdnf::Query query{sack};
     auto artifacts = module->getArtifacts();
     for (auto artifact : artifacts) {
-            nevra.parse(artifact.c_str(), HY_FORM_NEVRA);
-            query.addFilter(&nevra, false);
-
             artifact = artifact.replace(artifact.find("-0:"), 3, "-");
+            query.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, artifact.c_str());
 
             auto packageSet = const_cast<libdnf::PackageSet *>(query.runSet());
-            CPPUNIT_ASSERT(dnf_packageset_count(packageSet) == 1);
+            CPPUNIT_ASSERT(dnf_packageset_count(packageSet) >= 1);
             auto package = dnf_package_new(sack, packageSet->operator[](0));
             CPPUNIT_ASSERT(dnf_package_get_nevra(package) == artifact);
 
-            nevra.clear();
             query.clear();
         }
 }
 
 void ContextTest::sackHasNot(DnfSack *sack, const std::shared_ptr<ModuleMetadata> &module) const
 {
-    libdnf::Nevra nevra{};
     libdnf::Query query{sack};
     auto artifacts = module->getArtifacts();
     for (auto artifact : artifacts) {
-        nevra.parse(artifact.c_str(), HY_FORM_NEVRA);
-        query.addFilter(&nevra, false);
-
         artifact = artifact.replace(artifact.find("-0:"), 3, "-");
+        query.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, artifact.c_str());
 
         auto packageSet = const_cast<libdnf::PackageSet *>(query.runSet());
         CPPUNIT_ASSERT(dnf_packageset_count(packageSet) == 0);
 
-        nevra.clear();
         query.clear();
     }
 }
