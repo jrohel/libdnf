@@ -33,7 +33,7 @@ std::vector<std::shared_ptr<ModuleMetadata> > ModuleMetadata::wrapModulemdModule
     std::vector<std::shared_ptr<ModuleMetadata> > moduleCluster;
     for (unsigned int i = 0; i < data->len; i++) {
         auto module = g_ptr_array_index(data, i);
-        if (!MODULEMD_MODULE(module))
+        if (!MODULEMD_IS_MODULE(module))
             continue;
 
         g_object_ref(module);
