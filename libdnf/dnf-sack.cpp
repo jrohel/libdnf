@@ -2228,16 +2228,16 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
 
     // merge default and enabled streams into active streams
     std::map<std::string, std::string> activeStreams;
-    for (auto i : defaultStreams) {
+    for (auto & i : defaultStreams) {
         activeStreams.insert(i);
     }
-    for (auto i : enabledStreams) {
+    for (auto & i : enabledStreams) {
         activeStreams.insert(i);
     }
 
     // resolve module dependencies, enable additional streams
     auto dependencyStreams = getDependencyModuleStreams(moduleMetadata, activeStreams);
-    for (auto i : dependencyStreams) {
+    for (auto & i : dependencyStreams) {
         activeStreams.insert(i);
     }
 
@@ -2251,9 +2251,9 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
         bool isActiveStream = (iter == activeStreams.end()) ? false : (iter->second == mod->getStream());
         auto artifacts = mod->getArtifacts();
         if (isActiveStream) {
-            copy(artifacts.begin(), artifacts.end(), std::inserter(includeNEVRAs, includeNEVRAs.end()));
+            std::copy(artifacts.begin(), artifacts.end(), std::back_inserter(includeNEVRAs));
         } else {
-            copy(artifacts.begin(), artifacts.end(), std::inserter(excludeNEVRAs, excludeNEVRAs.end()));
+            std::copy(artifacts.begin(), artifacts.end(), std::back_inserter(excludeNEVRAs));
         }
     }
 
@@ -2265,18 +2265,17 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
 
     std::vector<std::string> names;
     for (const auto &rpm : includeNEVRAs) {
-        nevra.parse(rpm.c_str(), HY_FORM_NEVRA);
-        names.push_back(nevra.getName());
-        nevra.clear();
+        if (nevra.parse(rpm.c_str(), HY_FORM_NEVRA))
+            names.push_back(nevra.getName());
     }
     std::vector<const char *> namesCString(names.size());
     std::transform(names.begin(), names.end(), namesCString.begin(), std::mem_fn(&std::string::c_str));
 
     //includeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, includeNEVRAsCString);
-    includeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, &includeNEVRAsCString[0]);
+    includeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, includeNEVRAsCString.data());
 
     //excludeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, excludeNEVRAsCString);
-    excludeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, &excludeNEVRAsCString[0]);
+    excludeQuery.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, excludeNEVRAsCString.data());
     excludeQuery.queryDifference(includeQuery);
 
     excludeNamesQuery.addFilter(HY_PKG_NAME, HY_EQ, namesCString);
