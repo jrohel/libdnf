@@ -2257,10 +2257,10 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
         }
     }
 
-    std::vector<const char *> excludeNEVRAsCString(excludeNEVRAs.size());
+    std::vector<const char *> excludeNEVRAsCString(excludeNEVRAs.size() + 1); // +1 for terminating nullptr
     std::transform(excludeNEVRAs.begin(), excludeNEVRAs.end(), excludeNEVRAsCString.begin(), std::mem_fn(&std::string::c_str));
 
-    std::vector<const char *> includeNEVRAsCString(includeNEVRAs.size());
+    std::vector<const char *> includeNEVRAsCString(includeNEVRAs.size() + 1); // +1 for terminating nullptr
     std::transform(includeNEVRAs.begin(), includeNEVRAs.end(), includeNEVRAsCString.begin(), std::mem_fn(&std::string::c_str));
 
     std::vector<std::string> names;
