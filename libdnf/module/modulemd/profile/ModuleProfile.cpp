@@ -24,19 +24,19 @@ std::vector<std::string> ModuleProfile::getContent() const
     std::vector<std::string> rpms;
 
     ModulemdSimpleSet *profileRpms = modulemd_profile_peek_rpms(profile);
-    gchar **cRpms = modulemd_simpleset_get(profileRpms);
-
-    for (int i = 0; cRpms[i] != nullptr; i++) {
-        std::string rpm = cRpms[i];
-        rpms.push_back(rpm);
+    gchar **cRpms = modulemd_simpleset_dup(profileRpms);
+    for (auto rpm = cRpms; *cRpms; ++cRpms) {
+        rpms.push_back(*rpm);
+        g_free(*rpm);
     }
+    g_free(cRpms);
 
     return rpms;
 }
 
 bool ModuleProfile::hasRpm(const std::string &rpm) const
 {
-    for (auto &&item : getContent()) {
+    for (auto & item : getContent()) {
         if (item.find('*') != std::string::npos) {
             std::regex regexp(rpm);
             if (std::regex_search(item, regexp)) {

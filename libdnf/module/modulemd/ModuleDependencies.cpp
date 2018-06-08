@@ -27,11 +27,11 @@ std::map<std::string, std::vector<std::string>> ModuleDependencies::wrapModuleDe
 
     auto name = static_cast<const char *>(moduleName);
     auto streamSet = modulemd_simpleset_dup((ModulemdSimpleSet *) streams);
-    while (streamSet != nullptr) {
-        moduleRequirements[name].emplace_back(*streamSet);
-        streamSet++;
+    for (auto item = streamSet ; *item; ++item) {
+        moduleRequirements[name].emplace_back(*item);
+        g_free(*item);
     }
-
+    g_free(streamSet);
     return moduleRequirements;
 }
 

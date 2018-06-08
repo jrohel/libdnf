@@ -39,7 +39,6 @@ std::vector<std::shared_ptr<ModuleMetadata> > ModuleMetadata::wrapModulemdModule
         g_object_ref(module);
         auto modulemd = std::shared_ptr<ModulemdModule>((ModulemdModule *) module, g_object_unref);
         moduleCluster.push_back(std::make_shared<ModuleMetadata>(modulemd));
-        g_object_ref(module);
     }
 
     return moduleCluster;
@@ -54,8 +53,8 @@ void ModuleMetadata::reportFailures(const GPtrArray *failures)
     }
 }
 
-ModuleMetadata::ModuleMetadata(std::shared_ptr<ModulemdModule> modulemd)
-        : modulemd(std::move(modulemd))
+ModuleMetadata::ModuleMetadata(const std::shared_ptr<ModulemdModule> & modulemd)
+        : modulemd(modulemd)
 {}
 
 ModuleMetadata::~ModuleMetadata() = default;
@@ -115,14 +114,15 @@ std::vector<std::shared_ptr<ModuleDependencies> > ModuleMetadata::getDependencie
 
 std::vector<std::string> ModuleMetadata::getArtifacts() const
 {
-    ModulemdSimpleSet *cArtifacts = modulemd_module_get_rpm_artifacts(modulemd.get());
-    gchar **cRpms = modulemd_simpleset_get(cArtifacts);
+    ModulemdSimpleSet *cArtifacts = modulemd_module_peek_rpm_artifacts(modulemd.get());
+    gchar **cRpms = modulemd_simpleset_dup(cArtifacts);
 
     std::vector<std::string> artifacts;
-    for (int i = 0; cRpms[i] != nullptr; i++) {
-        std::string rpmStr = cRpms[i];
-        artifacts.push_back(rpmStr);
+    for (auto item = cRpms; *item; ++item) {
+        artifacts.push_back(*item);
+        g_free(*item);
     }
+    g_free(cRpms);
 
     return artifacts;
 }
@@ -131,6 +131,7 @@ std::vector<std::shared_ptr<ModuleProfile>> ModuleMetadata::getProfiles() const
 {
     GHashTable *cRequires = modulemd_module_peek_profiles(modulemd.get());
     std::vector<std::shared_ptr<ModuleProfile> > profiles;
+    profiles.reserve(g_hash_table_size(cRequires));
 
     GHashTableIter iterator{};
     gpointer key, value;

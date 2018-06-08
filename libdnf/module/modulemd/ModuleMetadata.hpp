@@ -18,7 +18,7 @@ public:
     static std::vector<std::shared_ptr<ModuleMetadata> > metadataFromString(const std::string &fileContent);
 
 public:
-    explicit ModuleMetadata(std::shared_ptr<ModulemdModule> modulemd);
+    explicit ModuleMetadata(const std::shared_ptr<ModulemdModule> & modulemd);
     ~ModuleMetadata();
 
     std::string getName() const;
