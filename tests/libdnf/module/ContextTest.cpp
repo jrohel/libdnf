@@ -71,6 +71,49 @@ void ContextTest::testLoadModules()
         if (module->getName() == "httpd" && module->getStream() == "2.2")
             sackHasNot(sack, module);
     }
+
+    {
+        libdnf::Query query{sack};
+        // no match with modular RPM $name -> keep
+        std::string nevra = "grub2-2.02-0.40.x86_64";
+        query.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, nevra.c_str());
+        auto packageSet = const_cast<libdnf::PackageSet *>(query.runSet());
+        CPPUNIT_ASSERT(dnf_packageset_count(packageSet) >= 1);
+        auto package = dnf_package_new(sack, packageSet->operator[](0));
+        CPPUNIT_ASSERT(dnf_package_get_nevra(package) == nevra);
+        query.clear();
+    }
+
+    {
+        libdnf::Query query{sack};
+        // $name matches with modular RPM $name -> exclude
+        std::string nevra = "httpd-2.2.10-1.x86_64";
+        query.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, nevra.c_str());
+        auto packageSet = const_cast<libdnf::PackageSet *>(query.runSet());
+        CPPUNIT_ASSERT(dnf_packageset_count(packageSet) == 0);
+        query.clear();
+    }
+
+    {
+        libdnf::Query query{sack};
+        // Provides: $name matches with modular RPM $name -> exclude
+        std::string nevra = "httpd-provides-name-3.0-1.x86_64";
+        query.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, nevra.c_str());
+        auto packageSet = const_cast<libdnf::PackageSet *>(query.runSet());
+        CPPUNIT_ASSERT(dnf_packageset_count(packageSet) == 0);
+        query.clear();
+    }
+
+    {
+        libdnf::Query query{sack};
+        // Provides: $name = ... matches with modular RPM $name -> exclude
+        std::string nevra = "httpd-provides-name-version-release-3.0-1.x86_64";
+        query.addFilter(HY_PKG_NEVRA_STRICT, HY_EQ, nevra.c_str());
+        auto packageSet = const_cast<libdnf::PackageSet *>(query.runSet());
+        CPPUNIT_ASSERT(dnf_packageset_count(packageSet) == 0);
+        query.clear();
+    }
+
 }
 
 void ContextTest::sackHas(DnfSack *sack, const std::shared_ptr<ModuleMetadata> &module) const

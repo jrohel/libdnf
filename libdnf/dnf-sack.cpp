@@ -72,6 +72,7 @@ extern "C" {
 #include "conf/OptionBool.hpp"
 #include "module/modulemd/ModuleDefaultsContainer.hpp"
 #include "module/modulemd/ModuleMetadata.hpp"
+#include "repo/solvable/DependencyContainer.hpp"
 #include "utils/File.hpp"
 #include "utils/utils.hpp"
 
@@ -2267,9 +2268,12 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
     std::transform(includeNEVRAs.begin(), includeNEVRAs.end(), includeNEVRAsCString.begin(), std::mem_fn(&std::string::c_str));
 
     std::vector<std::string> names;
+    auto nameDeps = new libdnf::DependencyContainer(sack);
     for (const auto &rpm : includeNEVRAs) {
-        if (nevra.parse(rpm.c_str(), HY_FORM_NEVRA))
+        if (nevra.parse(rpm.c_str(), HY_FORM_NEVRA)) {
             names.push_back(nevra.getName());
+            nameDeps->addReldep(nevra.getName().c_str());
+        }
     }
     std::vector<const char *> namesCString(names.size());
     std::transform(names.begin(), names.end(), namesCString.begin(), std::mem_fn(&std::string::c_str));
@@ -2284,10 +2288,12 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
     excludeNamesQuery.addFilter(HY_PKG_NAME, HY_EQ, namesCString);
     excludeNamesQuery.queryDifference(includeQuery);
 
-    excludeProvidesQuery.addFilter(HY_PKG_PROVIDES, HY_EQ, namesCString);
+    excludeProvidesQuery.addFilter(HY_PKG_PROVIDES, nameDeps);
     excludeProvidesQuery.queryDifference(includeQuery);
 
     dnf_sack_add_module_excludes(sack, const_cast<DnfPackageSet *>(excludeQuery.runSet()));
     dnf_sack_add_module_excludes(sack, const_cast<DnfPackageSet *>(excludeNamesQuery.runSet()));
     dnf_sack_add_module_excludes(sack, const_cast<DnfPackageSet *>(excludeProvidesQuery.runSet()));
+
+    delete nameDeps;
 }
