@@ -150,6 +150,24 @@ popd
 %endif
 
 %check
+if [ "$(id -u)" == "0" ] ; then
+        cat <<ERROR 1>&2
+Package tests cannot be run under superuser account.
+Please build the package as non-root user.
+ERROR
+        exit 1
+fi
+
+pushd build-py2
+  make ARGS="-V" test
+popd
+%if %{with python3}
+# Run just the Python tests, not all of them, since
+# we have coverage of the core from the first build
+pushd build-py3/python/hawkey/tests
+  make ARGS="-V" test
+popd
+%endif
 
 %install
 pushd build-py2
