@@ -2085,7 +2085,7 @@ static std::map<std::string, std::string> getEnabledModuleStreams(const char *in
 }
 
 static std::map<std::string, std::string>
-getDependencyModuleStreams(std::vector<std::shared_ptr<ModuleMetadata> > moduleMetadata, std::map<std::string, std::string> activeStreams)
+getDependencyModuleStreams(const std::vector<std::shared_ptr<ModuleMetadata> > & moduleMetadata, const std::map<std::string, std::string> & activeStreams)
 {
     // {name-stream: ModuleMetadata}
     std::map<std::string, std::shared_ptr<ModuleMetadata> > latestModuleVersionsByStream;
@@ -2105,7 +2105,7 @@ getDependencyModuleStreams(std::vector<std::shared_ptr<ModuleMetadata> > moduleM
 //    return result;
 
     // copy active streams into input buffer
-    for (auto i : activeStreams) {
+    for (auto & i : activeStreams) {
         input.push_back({i.first, i.second});
     }
 
@@ -2113,8 +2113,8 @@ getDependencyModuleStreams(std::vector<std::shared_ptr<ModuleMetadata> > moduleM
         auto pair = input.front();
         input.pop_front();
 
-        auto name = pair.first;
-        auto stream = pair.second;
+        auto name = std::move(pair.first);
+        auto stream = std::move(pair.second);
         std::string ns = name + ":" + stream;
 
         auto it = seen.find(name);
