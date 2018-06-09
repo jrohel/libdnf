@@ -1,20 +1,15 @@
 #include "File.hpp"
 #include "CompressedFile.hpp"
-#include "utils.hpp"
-
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sstream>
-#include <utility>
-#include <iostream>
 
 extern "C" {
 #   include <solv/solv_xfopen.h>
 };
 
-std::shared_ptr<libdnf::File> libdnf::File::newFile(const std::string &filePath)
+#include <stdlib.h>
+
+namespace libdnf {
+
+std::shared_ptr<File> File::newFile(const std::string & filePath)
 {
     if (solv_xfopen_iscompressed(filePath.c_str()) == 1) {
         return std::make_shared<libdnf::CompressedFile>(filePath);
@@ -23,34 +18,42 @@ std::shared_ptr<libdnf::File> libdnf::File::newFile(const std::string &filePath)
     }
 }
 
-libdnf::File::File(const std::string &filePath)
+File::File(const std::string & filePath)
         : filePath(filePath)
         , file(nullptr)
 {}
 
-libdnf::File::~File() = default;
-
-void libdnf::File::open(const char *mode)
+File::~File()
 {
+    close();
+}
+
+void File::open(const char * mode)
+{
+    close();
     file = fopen(filePath.c_str(), mode);
     if (!file) {
         throw OpenException(filePath);
     }
 }
 
-void libdnf::File::close()
+void File::close()
 {
+    if (!file)
+        return;
     if (fclose(file) != 0) {
+        file = nullptr;
         throw CloseException(filePath);
     }
+    file = nullptr;
 }
 
-size_t libdnf::File::read(char *buffer, size_t count)
+size_t File::read(char *buffer, size_t count)
 {
     return fread(buffer, sizeof(char), count, file);
 }
 
-bool libdnf::File::readLine(std::string &line)
+bool File::readLine(std::string & line)
 {
     char *buffer = nullptr;
     size_t size = 0;
@@ -65,33 +68,21 @@ bool libdnf::File::readLine(std::string &line)
     return true;
 }
 
-std::string libdnf::File::getContent()
+std::string File::getContent()
 {
-    auto fileSize = static_cast<size_t>(getFileSize());
-    auto content = new char[fileSize + 1];
-    size_t bytesRead;
-
-    if (!file) {
+    if (!file)
         throw NotOpenedException(filePath);
-    }
 
-    bytesRead = read (content, fileSize);
+    fseek(file, 0, SEEK_END);
+    size_t fileSize = ftell(file);
+    rewind(file);
+    std::string content(fileSize, '\0');
+    auto bytesRead = read(&content.front(), fileSize);
     if (bytesRead != fileSize) {
         throw ShortReadException(filePath);
     }
 
-    auto contentString = std::string(content);
-    delete [] content;
-
-    return contentString;
+    return content;
 }
 
-off_t libdnf::File::getFileSize()
-{
-    struct stat sb{};
-    if (stat(filePath.c_str(), &sb) != 0) {
-        return -1;
-    }
-    return sb.st_size;
 }
-

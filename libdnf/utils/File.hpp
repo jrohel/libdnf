@@ -1,9 +1,11 @@
 #ifndef LIBDNF_FILE_HPP
 #define LIBDNF_FILE_HPP
 
-#include <fstream>
 #include <memory>
+#include <stdexcept>
 #include <string>
+
+#include <stdio.h>
 
 namespace libdnf {
 
@@ -50,9 +52,6 @@ public:
 protected:
     std::string filePath;
     FILE *file;
-
-private:
-    off_t getFileSize();
 };
 
 }

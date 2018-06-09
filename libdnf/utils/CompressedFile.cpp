@@ -1,47 +1,41 @@
 #include "CompressedFile.hpp"
-#include <utility>
-#include <sstream>
+
 extern "C" {
 #   include <solv/solv_xfopen.h>
 };
 
-libdnf::CompressedFile::CompressedFile(const std::string &filePath)
+#include <sstream>
+
+namespace libdnf {
+
+CompressedFile::CompressedFile(const std::string & filePath)
         : File(filePath)
 {}
 
-libdnf::CompressedFile::~CompressedFile() = default;
-
-void libdnf::CompressedFile::open(const char *mode)
+void CompressedFile::open(const char * mode)
 {
+    close();
     file = solv_xfopen(filePath.c_str(), mode);
-}
-
-void libdnf::CompressedFile::close()
-{
-    fclose(file);
-}
-
-std::string libdnf::CompressedFile::getContent()
-{
-    std::ostringstream ss;
-
     if (!file) {
-        throw NotOpenedException(filePath);
+        throw OpenException(filePath);
     }
+}
+
+std::string CompressedFile::getContent()
+{
+    if (!file)
+        throw NotOpenedException(filePath);
 
     constexpr size_t bufferSize = 4096;
-    char buffer[bufferSize + 1];
-
-    while (true) {
-        auto bytesRead = read(buffer, bufferSize);
-        buffer[bytesRead] = '\0';
-
-        ss << buffer;
-
-        if (bytesRead != bufferSize) {
-            break;
-        }
-    }
+    char buffer[bufferSize];
+    std::ostringstream ss;
+    size_t bytesRead;
+    do {
+        bytesRead = read(buffer, bufferSize);
+        ss.write(buffer, bytesRead);
+    } while (bytesRead == bufferSize);
 
     return ss.str();
+}
+
 }

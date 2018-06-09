@@ -5,15 +5,11 @@
 
 namespace libdnf {
 
-class CompressedFile : public libdnf::File
+class CompressedFile : public File
 {
 public:
     explicit CompressedFile(const std::string &filePath);
-    ~CompressedFile() override;
-
     void open(const char *mode) override;
-    void close() override;
-
     std::string getContent() override;
 };
 
