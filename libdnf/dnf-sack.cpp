@@ -2170,6 +2170,8 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
 
         auto modules_fn = dnf_repo_get_filename_md(repo, "modules");
         if (modules_fn == nullptr)
+            // no modules -> no module RPM filtering
+            // apply names/Provides filters only (applies to both normal and hybrid repos)
             continue;
 
         auto yaml = libdnf::File::newFile(modules_fn);
@@ -2227,11 +2229,12 @@ void dnf_sack_filter_modules(DnfSack *sack, GPtrArray *repos, const char *instal
     auto enabledStreams = getEnabledModuleStreams(install_root);
 
     // merge default and enabled streams into active streams
+    // map::insert() inserts only if key wasn't found
     std::map<std::string, std::string> activeStreams;
-    for (auto & i : defaultStreams) {
+    for (auto & i : enabledStreams) {
         activeStreams.insert(i);
     }
-    for (auto & i : enabledStreams) {
+    for (auto & i : defaultStreams) {
         activeStreams.insert(i);
     }
 
