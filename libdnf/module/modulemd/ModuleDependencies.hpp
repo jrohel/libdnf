@@ -17,8 +17,8 @@ public:
     std::vector<std::map<std::string, std::vector<std::string> > > getRequires();
 
 private:
-    std::map<std::string, std::vector<std::string>> wrapModuleDependencies(const void *moduleName, const void *streams) const;
-    std::vector<std::map<std::string, std::vector<std::string> > > getRequirements(GHashTable *requirements) const;
+    static std::map<std::string, std::vector<std::string>> wrapModuleDependencies(const char *moduleName, ModulemdSimpleSet *streams);
+    static std::vector<std::map<std::string, std::vector<std::string> > > getRequirements(GHashTable *requirements);
 
     ModulemdDependencies *dependencies;
 };

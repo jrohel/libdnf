@@ -21,32 +21,28 @@ std::vector <std::map<std::string, std::vector<std::string> > > ModuleDependenci
     return getRequirements(cRequires);
 }
 
-std::map<std::string, std::vector<std::string>> ModuleDependencies::wrapModuleDependencies(const void *moduleName, const void *streams) const
+std::map<std::string, std::vector<std::string>> ModuleDependencies::wrapModuleDependencies(const char *moduleName, ModulemdSimpleSet *streams)
 {
     std::map<std::string, std::vector<std::string> > moduleRequirements;
-
-    auto name = static_cast<const char *>(moduleName);
-    auto streamSet = modulemd_simpleset_dup((ModulemdSimpleSet *) streams);
+    auto streamSet = modulemd_simpleset_dup(streams);
     for (auto item = streamSet ; *item; ++item) {
-        moduleRequirements[name].emplace_back(*item);
+        moduleRequirements[moduleName].emplace_back(*item);
         g_free(*item);
     }
     g_free(streamSet);
     return moduleRequirements;
 }
 
-std::vector<std::map<std::string, std::vector<std::string> > > ModuleDependencies::getRequirements(GHashTable *requirements) const
+std::vector<std::map<std::string, std::vector<std::string> > > ModuleDependencies::getRequirements(GHashTable *requirements)
 {
-    std::vector <std::map<std::string, std::vector<std::string> > > requires;
-    GHashTableIter iterator{};
+    std::vector<std::map<std::string, std::vector<std::string>>> requires;
+    requires.reserve(g_hash_table_size(requirements));
     gpointer key, value;
-
-    g_hash_table_iter_init (&iterator, requirements);
+    GHashTableIter iterator;
+    g_hash_table_iter_init(&iterator, requirements);
     while (g_hash_table_iter_next(&iterator, &key, &value)) {
-        auto moduleRequirements = wrapModuleDependencies(key, value);
-
+        auto moduleRequirements = wrapModuleDependencies(static_cast<const char *>(key), static_cast<ModulemdSimpleSet *>(value));
         requires.push_back(moduleRequirements);
     }
-
     return requires;
 }

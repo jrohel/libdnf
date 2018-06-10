@@ -21,9 +21,9 @@ std::string ModuleProfile::getDescription() const
 
 std::vector<std::string> ModuleProfile::getContent() const
 {
-    std::vector<std::string> rpms;
-
     ModulemdSimpleSet *profileRpms = modulemd_profile_peek_rpms(profile);
+    std::vector<std::string> rpms;
+    rpms.reserve(modulemd_simpleset_size(profileRpms));
     gchar **cRpms = modulemd_simpleset_dup(profileRpms);
     for (auto rpm = cRpms; *cRpms; ++cRpms) {
         rpms.push_back(*rpm);
