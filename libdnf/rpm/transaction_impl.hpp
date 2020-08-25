@@ -143,7 +143,6 @@ private:
     friend PackageSet;
     friend Reldep;
     friend ReldepList;
-    friend Transaction;
 };
 
 
