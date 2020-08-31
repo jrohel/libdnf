@@ -109,13 +109,12 @@ void Context::load_rpm_repo(libdnf::rpm::Repo & repo) {
 class PkgDownloadCB : public libdnf::rpm::PackageTargetCB {
 public:
     PkgDownloadCB(libdnf::cli::progressbar::MultiProgressBar & mp_bar, const std::string & what)
-        : multi_progress_bar(&mp_bar), what(what) {}
-
-    int end(TransferStatus status, const char * msg) override {
-        if (!progress_bar) {
+        : multi_progress_bar(&mp_bar), what(what) {
             progress_bar = new libdnf::cli::progressbar::DownloadProgressBar(-1, what);
             multi_progress_bar->add_bar(progress_bar);
         }
+
+    int end(TransferStatus status, const char * msg) override {
         switch (status) {
             case TransferStatus::SUCCESSFUL:
                 //std::cout << "[DONE] " << what << std::endl;
@@ -136,10 +135,6 @@ public:
     }
 
     int progress(double total_to_download, double downloaded) override {
-        if (!progress_bar) {
-            progress_bar = new libdnf::cli::progressbar::DownloadProgressBar(-1, what);
-            multi_progress_bar->add_bar(progress_bar);
-        }
         auto total = static_cast<int64_t>(total_to_download);
         if (total > 0) {
             progress_bar->set_total_ticks(total);
@@ -156,10 +151,6 @@ public:
 
     int mirror_failure(const char * msg, const char * url) override {
         //std::cout << "Mirror failure: " << msg << " " << url << std::endl;
-        if (!progress_bar) {
-            progress_bar = new libdnf::cli::progressbar::DownloadProgressBar(-1, what);
-            multi_progress_bar->add_bar(progress_bar);
-        }
         std::string message = std::string(msg) + " - " + url;
         progress_bar->add_message(libdnf::cli::progressbar::MessageType::ERROR, message);
         return 0;
@@ -180,7 +171,7 @@ private:
     static std::chrono::time_point<std::chrono::steady_clock> prev_print_time;
 
     libdnf::cli::progressbar::MultiProgressBar * multi_progress_bar;
-    libdnf::cli::progressbar::DownloadProgressBar * progress_bar{nullptr};
+    libdnf::cli::progressbar::DownloadProgressBar * progress_bar;
     std::string what;
 };
 
