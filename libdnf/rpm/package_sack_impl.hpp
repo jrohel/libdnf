@@ -27,6 +27,7 @@ along with libdnf.  If not, see <https://www.gnu.org/licenses/>.
 #include "solv/solv_map.hpp"
 
 #include "libdnf/base/base.hpp"
+#include "libdnf/common/sack/query_flags.hpp"
 #include "libdnf/rpm/package.hpp"
 
 extern "C" {
@@ -83,6 +84,11 @@ public:
     PackageId get_running_kernel() const noexcept { return running_kernel; };
 
     void set_running_kernel(PackageId kernel) { running_kernel = kernel; };
+
+    /// Computes considered map.
+    /// returns pointer to `considered` argument or `nullptr` if considered was not set
+    libdnf::solv::SolvMap * compute_considered_map(
+        libdnf::solv::SolvMap & considered, libdnf::sack::QueryFlags flags) const;
 
 private:
     bool provides_ready{false};
