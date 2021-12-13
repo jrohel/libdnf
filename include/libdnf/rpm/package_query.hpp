@@ -29,6 +29,7 @@ along with libdnf.  If not, see <https://www.gnu.org/licenses/>.
 #include "libdnf/base/goal_elements.hpp"
 #include "libdnf/common/exception.hpp"
 #include "libdnf/common/sack/query_cmp.hpp"
+#include "libdnf/common/sack/query_flags.hpp"
 
 #include <string>
 #include <vector>
@@ -48,20 +49,14 @@ namespace libdnf::rpm {
 // @replaces hawkey:hawkey/__init__.py:class:Query
 class PackageQuery : public PackageSet {
 public:
-    enum class InitFlags {
-        APPLY_EXCLUDES = 0,
-        IGNORE_MODULAR_EXCLUDES = 1 << 0,
-        IGNORE_REGULAR_EXCLUDES = 1 << 1,
-        IGNORE_EXCLUDES = IGNORE_MODULAR_EXCLUDES | IGNORE_REGULAR_EXCLUDES,
-        EMPTY = 1 << 2
-    };
+    using Flags = libdnf::sack::QueryFlags;
 
     // @replaces libdnf/hy-query.h:function:hy_query_create(DnfSack *sack);
     // @replaces libdnf/hy-query.h:function:hy_query_create_flags(DnfSack *sack, int flags);
     // @replaces libdnf/sack/query.hpp:method:Query(DnfSack* sack, ExcludeFlags flags = ExcludeFlags::APPLY_EXCLUDES)
     // @replaces libdnf/dnf-reldep.h:function:dnf_reldep_free(DnfReldep *reldep)
-    explicit PackageQuery(const libdnf::BaseWeakPtr & base, InitFlags flags = InitFlags::APPLY_EXCLUDES);
-    explicit PackageQuery(libdnf::Base & base, InitFlags flags = InitFlags::APPLY_EXCLUDES);
+    explicit PackageQuery(const libdnf::BaseWeakPtr & base, Flags flags = Flags::APPLY_EXCLUDES, bool empty = false);
+    explicit PackageQuery(libdnf::Base & base, Flags flags = Flags::APPLY_EXCLUDES, bool empty = false);
     PackageQuery(const PackageQuery & src) = default;
     PackageQuery(PackageQuery && src) noexcept = default;
     ~PackageQuery() = default;
@@ -609,7 +604,7 @@ public:
 private:
     friend libdnf::Goal;
     class Impl;
-    InitFlags init_flags;
+    Flags flags;
 };
 
 
