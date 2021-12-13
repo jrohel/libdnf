@@ -90,6 +90,9 @@ public:
     libdnf::solv::SolvMap * compute_considered_map(
         libdnf::solv::SolvMap & considered, libdnf::sack::QueryFlags flags) const;
 
+    /// Recompute considered map used in Pool
+    void recompute_considered_in_pool();
+
 private:
     bool provides_ready{false};
 
@@ -103,6 +106,8 @@ private:
 
     std::unique_ptr<libdnf::solv::SolvMap> module_excludes;  // used for packages excluded by modularity
     std::unique_ptr<libdnf::solv::SolvMap> module_includes;  // used for modular packages
+
+    bool considered_uptodate = true;
 
     std::vector<Solvable *> cached_sorted_solvables;
     int cached_sorted_solvables_size{0};
