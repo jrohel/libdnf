@@ -57,11 +57,11 @@ public:
     // @replaces libdnf/dnf-reldep.h:function:dnf_reldep_free(DnfReldep *reldep)
     explicit PackageQuery(const libdnf::BaseWeakPtr & base, Flags flags = Flags::APPLY_EXCLUDES, bool empty = false);
     explicit PackageQuery(libdnf::Base & base, Flags flags = Flags::APPLY_EXCLUDES, bool empty = false);
-    PackageQuery(const PackageQuery & src) = default;
+    PackageQuery(const PackageQuery & src);
     PackageQuery(PackageQuery && src) noexcept = default;
-    ~PackageQuery() = default;
+    ~PackageQuery();
 
-    PackageQuery & operator=(const PackageQuery & src) = default;
+    PackageQuery & operator=(const PackageQuery & src);
     PackageQuery & operator=(PackageQuery && src) noexcept = default;
 
     /// Filter packages by their `name`.
@@ -605,6 +605,7 @@ private:
     friend libdnf::Goal;
     class Impl;
     Flags flags;
+    std::unique_ptr<libdnf::solv::SolvMap> considered_cached;
 };
 
 

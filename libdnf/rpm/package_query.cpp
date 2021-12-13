@@ -226,24 +226,56 @@ static inline bool name_arch_compare_lower_solvable(const Solvable * first, cons
 
 
 PackageQuery::PackageQuery(const BaseWeakPtr & base, Flags flags, bool empty) : PackageSet(base), flags(flags) {
-    if (empty) {
-        return;
+    if (!empty) {
+        *p_impl |= base->get_rpm_package_sack()->p_impl->get_solvables();
     }
 
+    auto & pool = get_pool(base);
     switch (flags) {
-        case Flags::IGNORE_EXCLUDES:
-            // TODO(jmracek) add exclude application
         case Flags::APPLY_EXCLUDES:
-        case Flags::IGNORE_MODULAR_EXCLUDES:
-        case Flags::IGNORE_REGULAR_EXCLUDES:
-            *p_impl |= base->get_rpm_package_sack()->p_impl->get_solvables();
+            base->get_rpm_package_sack()->p_impl->recompute_considered_in_pool();
+            if (!empty && pool.is_considered_map_active()) {
+                *p_impl &= pool.get_considered_map();
+            }
             break;
+        case Flags::IGNORE_REGULAR_EXCLUDES:
+        case Flags::IGNORE_MODULAR_EXCLUDES: {
+            libdnf::solv::SolvMap init_map(0);
+            if (base->get_rpm_package_sack()->p_impl->compute_considered_map(init_map, flags)) {
+                considered_cached.reset(new libdnf::solv::SolvMap(std::move(init_map)));
+                if (!empty) {
+                    *p_impl &= *considered_cached;
+                }
+            }
+            break;
+        }
+        case Flags::IGNORE_EXCLUDES:;
     }
 }
 
 PackageQuery::PackageQuery(libdnf::Base & base, Flags flags, bool empty)
     : PackageQuery(base.get_weak_ptr(), flags, empty) {}
 
+PackageQuery::PackageQuery(const PackageQuery & src) : PackageSet(src), flags(src.flags) {
+    considered_cached.reset(src.considered_cached ? new libdnf::solv::SolvMap(*src.considered_cached) : nullptr);
+}
+
+PackageQuery & PackageQuery::operator=(const PackageQuery & src) {
+    if (this != &src) {
+        PackageSet::operator=(src);
+        flags = src.flags;
+        if (!src.considered_cached) {
+            considered_cached.reset();
+        } else if (considered_cached) {
+            *considered_cached = *considered_cached;
+        } else {
+            considered_cached.reset(new libdnf::solv::SolvMap(*src.considered_cached));
+        }
+    }
+    return *this;
+}
+
+PackageQuery::~PackageQuery() = default;
 
 template <const char * (libdnf::solv::Pool::*getter)(Id) const>
 inline static void filter_glob_internal(
@@ -2084,17 +2116,16 @@ PackageQuery & PackageQuery::filter_upgradable() {
     libdnf::solv::SolvMap filter_result(pool.get_nsolvables());
 
     for (auto pkg_id : sack->p_impl->get_solvables()) {
-        // if (flags == Query::ExcludeFlags::APPLY_EXCLUDES) {
-        //     if (pool->considered && !map_tst(pool->considered, p))
-        //         continue;
-        // } else {
-        //     if (considered_cached && !map_tst(considered_cached, p))
-        //         continue;
-        // }
-        // s = pool.id2solvable(p);
+        if (flags == Flags::APPLY_EXCLUDES) {
+            if (pool.is_considered_map_active() && pool.get_considered_map().contains_unsafe(pkg_id)) {
+                continue;
+            }
+        } else {
+            if (considered_cached && considered_cached->contains_unsafe(pkg_id)) {
+                continue;
+            }
+        }
 
-        // TODO(jmracek) Filter out solvables that were excluded accordin to flags for initiation
-        // When initlad emptu raise Exception
         Solvable * solvable = pool.id2solvable(pkg_id);
         if (solvable->repo == installed_repo) {
             continue;
@@ -2124,17 +2155,16 @@ PackageQuery & PackageQuery::filter_downgradable() {
     libdnf::solv::SolvMap filter_result(pool.get_nsolvables());
 
     for (auto pkg_id : sack->p_impl->get_solvables()) {
-        //  if (flags == Query::ExcludeFlags::APPLY_EXCLUDES) {
-        //      if (pool->considered && !map_tst(pool->considered, p))
-        //          continue;
-        //  } else {
-        //      if (considered_cached && !map_tst(considered_cached, p))
-        //          continue;
-        //  }
-        //  s = pool.id2solvable(p);
+        if (flags == Flags::APPLY_EXCLUDES) {
+            if (pool.is_considered_map_active() && pool.get_considered_map().contains_unsafe(pkg_id)) {
+                continue;
+            }
+        } else {
+            if (considered_cached && considered_cached->contains_unsafe(pkg_id)) {
+                continue;
+            }
+        }
 
-        // TODO(jmracek) Filter out solvables that were excluded accordin to flags for initiation
-        // When initlad emptu raise Exception
         Solvable * solvable = pool.id2solvable(pkg_id);
         if (solvable->repo == installed_repo) {
             continue;
@@ -2364,6 +2394,7 @@ std::pair<bool, libdnf::rpm::Nevra> PackageQuery::resolve_pkg_spec(
 void PackageQuery::swap(PackageQuery & other) noexcept {
     PackageSet::swap(other);
     std::swap(flags, other.flags);
+    considered_cached.swap(other.considered_cached);
 }
 
 }  //  namespace libdnf::rpm
