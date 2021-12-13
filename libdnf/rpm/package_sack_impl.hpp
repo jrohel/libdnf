@@ -91,6 +91,13 @@ private:
 
     WeakPtrGuard<PackageSack, false> sack_guard;
 
+    std::unique_ptr<libdnf::solv::SolvMap> pkg_excludes;  // used for explicitly excluded packages (eg by configuration)
+    std::unique_ptr<libdnf::solv::SolvMap> pkg_includes;  // used for explicitly included packages (eg by configuration)
+    std::unique_ptr<libdnf::solv::SolvMap> repo_excludes;  // used for disabled repositories, optimize queries
+
+    std::unique_ptr<libdnf::solv::SolvMap> module_excludes;  // used for packages excluded by modularity
+    std::unique_ptr<libdnf::solv::SolvMap> module_includes;  // used for modular packages
+
     std::vector<Solvable *> cached_sorted_solvables;
     int cached_sorted_solvables_size{0};
     /// pair<id_of_lowercase_name, Solvable *>
