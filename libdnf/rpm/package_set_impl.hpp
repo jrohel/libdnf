@@ -54,6 +54,8 @@ public:
     Impl & operator=(const libdnf::solv::SolvMap & map);
     Impl & operator=(libdnf::solv::SolvMap && map);
 
+    static const SolvMap & get_solv_map(const PackageSet & pkg_set) { return *pkg_set.p_impl; }
+
 private:
     friend PackageSet;
     friend PackageQuery;

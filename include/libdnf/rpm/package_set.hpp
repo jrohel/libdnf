@@ -147,6 +147,8 @@ public:
 
     void swap(PackageSet & other) noexcept;
 
+    class Impl;
+
 private:
     friend PackageSetIterator;
     friend class PackageQuery;
@@ -154,7 +156,6 @@ private:
     friend class libdnf::base::Transaction;
     friend libdnf::Goal;
     PackageSet(const BaseWeakPtr & base, libdnf::solv::SolvMap & solv_map);
-    class Impl;
     std::unique_ptr<Impl> p_impl;
 };
 
