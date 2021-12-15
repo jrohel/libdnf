@@ -85,6 +85,8 @@ public:
 
     void set_running_kernel(PackageId kernel) { running_kernel = kernel; };
 
+    void setup_excludes_includes(bool only_main = false);
+
     /// Computes considered map.
     /// returns pointer to `considered` argument or `nullptr` if considered was not set
     libdnf::solv::SolvMap * compute_considered_map(
