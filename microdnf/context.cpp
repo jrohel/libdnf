@@ -344,6 +344,8 @@ void Context::load_repos(libdnf::repo::RepoQuery & repos, libdnf::repo::Repo::Lo
     finish_sack_loader();
     catch_thread_sack_loader_exceptions();
     print_info("Sack is filled.");
+
+    base.get_rpm_package_sack()->setup_excludes_includes();
 }
 
 void Context::load_repos(bool system, bool enabled_available, libdnf::repo::Repo::LoadFlags flags) {
